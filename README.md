@@ -29,14 +29,30 @@ Mom taps a word button → AI generates sentences she might be trying to say →
 ```
 aphasia-talk/
   SPEC.md              # Full project specification (start here)
-  backend/             # FastAPI Python backend
-  frontend/            # Flutter tablet app
+  backend/             # FastAPI backend (orchestrates vLLM + whisper.cpp + SQLite)
+  frontend/            # Web frontend (functional prototype + interaction reference)
   docker-compose.yml   # DGX Spark deployment (vLLM + whisper.cpp + backend)
 ```
 
-## Quick Start
+The web frontend implements the real interaction model end to end and serves as
+the precise visual/behavior reference for the eventual Flutter tablet build.
 
-See [SPEC.md](SPEC.md) for the complete technical specification, API design, UI layout, and deployment guide.
+## Quick Start (no GPU required)
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8080
+```
+
+Open **http://127.0.0.1:8080/**. The backend defaults to `MOCK_INFERENCE=true`,
+so tapping a word returns plausible fabricated sentences — the entire UI
+(word grid, generation, bookmarking, speech, photo, dictation) works without a
+DGX Spark. Flip `MOCK_INFERENCE=false` on the Spark to use the real models.
+
+See [backend/README.md](backend/README.md) for the API reference and
+[SPEC.md](SPEC.md) for the complete specification.
 
 ## License
 

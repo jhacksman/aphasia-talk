@@ -1,0 +1,59 @@
+# DGX Spark deployment: vLLM (Qwen3.6-35B-A3B) + whisper.cpp + FastAPI backend.
+# The backend also serves the web frontend at http://<spark-ip>:8080/.
+#
+# For development without a GPU, run just the backend with MOCK_INFERENCE=true
+# (see backend/.env.example) — it fabricates sentences so the full UI works.
+
+services:
+  vllm:
+    image: vllm/vllm-openai:cu130-nightly
+    runtime: nvidia
+    ports:
+      - "8000:8000"
+    volumes:
+      - /home/user/models:/models
+    command: >
+      vllm serve Qwen/Qwen3.6-35B-A3B-FP8
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization 0.85
+      --max-model-len 131072
+      --enable-prefix-caching
+      --reasoning-parser qwen3
+      --max-num-seqs 4
+      --max-num-batched-tokens 4096
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  whisper:
+    image: whisper-cpp-server:sm121
+    runtime: nvidia
+    ports:
+      - "8001:8001"
+    volumes:
+      - /home/user/models/whisper:/models
+    command: >
+      --model /models/ggml-large-v3-turbo.bin
+      --port 8001
+      --host 0.0.0.0
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - MOCK_INFERENCE=false
+      - VLLM_URL=http://vllm:8000
+      - VLLM_MODEL=Qwen/Qwen3.6-35B-A3B-FP8
+      - WHISPER_URL=http://whisper:8001
+      - DATABASE_PATH=/app/data/aphasia_talk.db
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - vllm
+      - whisper

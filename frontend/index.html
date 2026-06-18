@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Aphasia Talk</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
+<style>
+  :root {
+    --blue: #1A6FC4;
+    --blue-light: #EAF2FB;
+    --blue-dark: #0C4A8A;
+    --green: #1A8C5B;
+    --green-light: #E6F5EE;
+    --red: #C42B2B;
+    --red-light: #FBEBEB;
+    --amber: #B86A00;
+    --amber-light: #FDF3E3;
+    --gold: #C99700;
+    --bg: #F6F5F3;
+    --surface: #FFFFFF;
+    --border: rgba(0,0,0,0.10);
+    --border-strong: rgba(0,0,0,0.18);
+    --text: #1A1916;
+    --text-muted: #6B6965;
+    --text-hint: #A09D99;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(0,0,0,0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18171A;
+      --surface: #242228;
+      --border: rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.18);
+      --text: #F0EDE8;
+      --text-muted: #A09D99;
+      --text-hint: #6B6965;
+      --blue-light: #0E2A44;
+      --green-light: #0D2A1F;
+      --red-light: #2C1010;
+      --amber-light: #2A1C08;
+      --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.06);
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 12px 16px 10px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: var(--text); }
+  header p { font-size: 12px; color: var(--text-muted); }
+  .header-spacer { flex: 1; }
+  .conn-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--text-hint); flex-shrink: 0;
+  }
+  .conn-dot.online { background: var(--green); }
+  .conn-dot.offline { background: var(--red); }
+  .btn-settings {
+    background: none; border: none; cursor: pointer; color: var(--text-muted);
+    font-size: 20px; padding: 6px; border-radius: 8px; display: flex; align-items: center;
+  }
+  .btn-settings:hover { background: var(--bg); color: var(--text); }
+
+  /* ── Output bar ── */
+  .output-bar {
+    margin: 10px 12px 0;
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+    min-height: 56px;
+  }
+  .output-text {
+    flex: 1; font-size: 18px; font-weight: 500; line-height: 1.35;
+    color: var(--text); word-break: break-word;
+  }
+  .output-placeholder { color: var(--text-hint); font-weight: 400; font-size: 15px; font-style: italic; }
+  .btn-clear {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); padding: 6px; border-radius: 8px;
+    font-size: 22px; display: flex; align-items: center; flex-shrink: 0;
+  }
+  .btn-clear:hover { background: var(--red-light); color: var(--red); }
+  .btn-speak {
+    background: var(--blue); color: #fff;
+    border: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .btn-speak:hover { background: var(--blue-dark); }
+  .btn-speak:disabled { opacity: 0.4; cursor: default; }
+  .btn-speak i { font-size: 17px; }
+
+  /* ── Main panels ── */
+  .panels { display: flex; gap: 10px; flex: 1; min-height: 0; padding: 10px 12px; }
+  .panel {
+    flex: 1; display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden; box-shadow: var(--shadow); min-width: 0;
+  }
+  .panel-head {
+    padding: 9px 12px; border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 7px; flex-shrink: 0; background: var(--bg);
+  }
+  .panel-head i { font-size: 16px; color: var(--text-muted); }
+  .panel-head span { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); }
+  .panel-head .head-word { color: var(--blue); text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 13px; }
+
+  /* words */
+  .cat-tabs {
+    display: flex; gap: 5px; padding: 8px 10px; flex-wrap: wrap;
+    border-bottom: 0.5px solid var(--border); flex-shrink: 0; background: var(--surface);
+  }
+  .cat-tab {
+    font-size: 12px; font-weight: 500; padding: 4px 11px;
+    border-radius: 20px; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text-muted); cursor: pointer;
+  }
+  .cat-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .cat-tab:active { opacity: 0.8; }
+
+  .words-scroll { overflow-y: auto; flex: 1; display: flex; flex-direction: column; }
+  .words-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 8px; }
+  .word-tile {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    padding: 10px 4px; min-height: 70px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--bg); cursor: pointer; text-align: center;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    transition: background 0.12s, border-color 0.12s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .word-tile i { font-size: 26px; color: var(--cat-color, var(--blue)); }
+  .word-tile:hover, .word-tile:active { background: var(--blue-light); border-color: var(--blue); }
+  .word-tile.selected { background: var(--blue-light); border-color: var(--blue); border-width: 2px; }
+  .word-tile:active { transform: scale(0.96); }
+
+  .related-section { padding: 4px 8px 8px; }
+  .related-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-hint); padding: 6px 4px 5px;
+  }
+  .related-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .related-chip {
+    font-size: 13px; font-weight: 600; padding: 8px 14px;
+    border-radius: 18px; border: 1px dashed var(--border-strong);
+    background: var(--surface); color: var(--text); cursor: pointer;
+  }
+  .related-chip:hover, .related-chip:active { background: var(--blue-light); border-color: var(--blue); border-style: solid; }
+
+  /* sentences */
+  .sentences-list { display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow-y: auto; flex: 1; }
+  .sentence-tile {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--bg);
+    font-size: 14px; font-weight: 500; color: var(--text);
+    text-align: left; line-height: 1.4;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .sentence-tile .say {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    background: none; border: none; cursor: pointer; text-align: left;
+    font: inherit; color: inherit; padding: 0; min-width: 0;
+    -webkit-user-select: none; user-select: none;
+  }
+  .sentence-tile .say > i { font-size: 20px; color: var(--green); flex-shrink: 0; }
+  .sentence-tile .say > span { min-width: 0; }
+  .sentence-tile:hover, .sentence-tile:active { background: var(--green-light); border-color: var(--green); }
+  .btn-star {
+    background: none; border: none; cursor: pointer; flex-shrink: 0;
+    color: var(--text-hint); font-size: 21px; padding: 4px; border-radius: 8px;
+    display: flex; align-items: center;
+  }
+  .btn-star.on { color: var(--gold); }
+  .btn-star:hover { background: var(--amber-light); }
+  .sentence-tile.bookmarked { border-color: var(--gold); }
+
+  .empty-state, .loading-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; gap: 10px; color: var(--text-hint); text-align: center; padding: 24px;
+  }
+  .empty-state i { font-size: 40px; }
+  .empty-state p { font-size: 14px; max-width: 240px; line-height: 1.5; }
+  .spinner {
+    width: 30px; height: 30px; border: 3px solid var(--border-strong);
+    border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Bottom bar ── */
+  .bottom-bar { display: flex; gap: 10px; justify-content: center; padding: 0 12px 12px; flex-shrink: 0; }
+  .action-btn {
+    flex: 1; max-width: 130px;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 11px 8px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    cursor: pointer; color: var(--text-muted); box-shadow: var(--shadow);
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .action-btn i { font-size: 26px; }
+  .action-btn span { font-size: 11px; font-weight: 600; }
+  .action-btn.mic:hover, .action-btn.mic:active { background: var(--red-light); color: var(--red); border-color: var(--red); }
+  .action-btn.photo:hover, .action-btn.photo:active { background: var(--amber-light); color: var(--amber); border-color: var(--amber); }
+  .action-btn.keyboard:hover, .action-btn.keyboard:active { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+  .action-btn.mic.recording { background: var(--red-light); color: var(--red); border-color: var(--red); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+  /* ── Overlays (keyboard + settings) ── */
+  .overlay {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1px solid var(--border-strong);
+    padding: 12px 14px 20px; z-index: 100;
+    transform: translateY(100%); transition: transform 0.22s ease;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+  }
+  .overlay.open { transform: translateY(0); }
+  .ov-row { display: flex; gap: 8px; align-items: center; }
+  .ov-row + .ov-row { margin-top: 10px; }
+  .ov-label { font-size: 12px; color: var(--text-muted); width: 100%; }
+  .ov-input {
+    flex: 1; font-size: 16px; padding: 10px 14px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--bg); color: var(--text); outline: none;
+  }
+  .ov-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,111,196,0.15); }
+  .ov-btn {
+    background: var(--blue); color: #fff; border: none;
+    font-size: 15px; font-weight: 600; padding: 10px 18px;
+    border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .ov-btn:hover { background: var(--blue-dark); }
+  .ov-btn.secondary {
+    background: none; border: 1px solid var(--border-strong); color: var(--text-muted);
+  }
+  .ov-btn.secondary:hover { background: var(--bg); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+  @media (max-width: 540px) {
+    .panels { gap: 7px; padding: 8px 8px; }
+    .words-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 6px; }
+    .word-tile { min-height: 64px; font-size: 12px; }
+    .word-tile i { font-size: 22px; }
+    .sentence-tile { font-size: 13px; padding: 9px 10px; }
+    .output-text { font-size: 16px; }
+    .action-btn span { font-size: 10px; }
+    .bottom-bar { gap: 7px; }
+  }
+  @media (max-height: 600px) { .word-tile { min-height: 54px; } .panels { padding: 6px 10px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .action-btn.mic.recording { animation: none; opacity: 0.75; }
+    .spinner { animation-duration: 1.6s; }
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Aphasia Talk</h1>
+    <p>Tap a word, then tap a sentence to speak</p>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="conn-dot" id="conn-dot" title="Connection status"></div>
+  <button class="btn-settings" onclick="toggleSettings()" aria-label="Settings"><i class="ti ti-settings"></i></button>
+</header>
+
+<div class="output-bar">
+  <div class="output-text" id="output-text">
+    <span class="output-placeholder">Tap a word, then a sentence below…</span>
+  </div>
+  <button class="btn-clear" onclick="clearOutput()" aria-label="Clear message" title="Clear"><i class="ti ti-x"></i></button>
+  <button class="btn-speak" id="btn-speak" onclick="speakOutput()" aria-label="Speak message" disabled><i class="ti ti-volume"></i> Speak</button>
+</div>
+
+<div class="panels">
+  <!-- Words panel -->
+  <div class="panel">
+    <div class="panel-head">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i><span>Words</span>
+    </div>
+    <div class="cat-tabs" id="cat-tabs" role="tablist"></div>
+    <div class="words-scroll">
+      <div class="words-grid" id="words-grid" role="list"></div>
+      <div class="related-section" id="related-section" style="display:none">
+        <div class="related-label">Related words</div>
+        <div class="related-chips" id="related-chips"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sentences panel -->
+  <div class="panel">
+    <div class="panel-head">
+      <i class="ti ti-message-2" aria-hidden="true"></i><span>Sentences</span>
+      <span class="head-word" id="head-word"></span>
+    </div>
+    <div class="sentences-list" id="sentences-list" role="list"></div>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <button class="action-btn mic" id="mic-btn" onclick="toggleMic()" aria-label="Dictate — tap to speak">
+    <i class="ti ti-microphone"></i><span>Dictate</span>
+  </button>
+  <button class="action-btn photo" onclick="triggerPhoto()" aria-label="Take or upload a photo">
+    <i class="ti ti-camera"></i><span>Photo</span>
+  </button>
+  <button class="action-btn keyboard" onclick="toggleKeyboard()" aria-label="Type a word or phrase">
+    <i class="ti ti-keyboard"></i><span>Keyboard</span>
+  </button>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
+
+<!-- Keyboard overlay -->
+<div class="overlay" id="kb-overlay" role="dialog" aria-label="Type a word">
+  <div class="ov-row">
+    <input class="ov-input" id="kb-input" type="text" placeholder="Type a word…"
+      onkeydown="if(event.key==='Enter') addFromKeyboard()" autocomplete="off"/>
+    <button class="ov-btn" onclick="addFromKeyboard()">Go</button>
+    <button class="ov-btn secondary" onclick="toggleKeyboard()">Done</button>
+  </div>
+</div>
+
+<!-- Settings overlay -->
+<div class="overlay" id="settings-overlay" role="dialog" aria-label="Settings">
+  <div class="ov-row"><label class="ov-label" for="backend-input">Backend address (DGX Spark)</label></div>
+  <div class="ov-row">
+    <input class="ov-input" id="backend-input" type="text" placeholder="http://192.168.1.50:8080" autocomplete="off"/>
+    <button class="ov-btn" onclick="saveBackend()">Save</button>
+    <button class="ov-btn secondary" onclick="toggleSettings()">Close</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ── Configuration ──────────────────────────────────────────────────────────
+// Default to same-origin (backend serves this file) but allow override so the
+// page can be hosted anywhere and point at the DGX Spark on the LAN.
+const DEFAULT_BACKEND = window.location.origin;
+let backendUrl = localStorage.getItem("backendUrl") || DEFAULT_BACKEND;
+
+let categories = [];          // [{name, color, words:[{text,icon,position}]}]
+let currentCategory = null;
+let currentWord = null;
+let selectedSentence = "";
+let bookmarks = [];           // [{id, text, word, category}]
+let micActive = false;
+let kbOpen = false, settingsOpen = false;
+
+const $ = (id) => document.getElementById(id);
+
+// ── API helpers ─────────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const res = await fetch(backendUrl.replace(/\/$/, "") + path, opts);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+function setConn(state) {
+  const dot = $("conn-dot");
+  dot.classList.remove("online", "offline");
+  if (state) dot.classList.add(state);
+}
+
+// ── Load word grid + bookmarks ───────────────────────────────────────────────
+async function loadWords() {
+  try {
+    const data = await api("/words");
+    categories = data.categories;
+    localStorage.setItem("wordsCache", JSON.stringify(categories));
+    setConn("online");
+  } catch (e) {
+    const cached = localStorage.getItem("wordsCache");
+    categories = cached ? JSON.parse(cached) : FALLBACK_WORDS;
+    setConn("offline");
+  }
+  currentCategory = categories[0] ? categories[0].name : null;
+  renderTabs();
+  renderWords();
+}
+
+async function loadBookmarks() {
+  try {
+    const data = await api("/bookmarks");
+    bookmarks = data.bookmarks || [];
+    localStorage.setItem("bookmarksCache", JSON.stringify(bookmarks));
+  } catch (e) {
+    const cached = localStorage.getItem("bookmarksCache");
+    bookmarks = cached ? JSON.parse(cached) : [];
+  }
+}
+
+function findCategory(name) { return categories.find((c) => c.name === name); }
+function colorFor(name) { const c = findCategory(name); return c ? c.color : "#1A6FC4"; }
+function bookmarkFor(text, word) {
+  return bookmarks.find((b) => b.text === text && (!word || b.word === word));
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const tabs = $("cat-tabs");
+  tabs.innerHTML = "";
+  categories.forEach((cat) => {
+    const btn = document.createElement("button");
+    btn.className = "cat-tab" + (cat.name === currentCategory ? " active" : "");
+    btn.textContent = cat.name;
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", cat.name === currentCategory ? "true" : "false");
+    btn.onclick = () => { currentCategory = cat.name; renderTabs(); renderWords(); };
+    tabs.appendChild(btn);
+  });
+}
+
+function renderWords() {
+  const grid = $("words-grid");
+  grid.innerHTML = "";
+  const cat = findCategory(currentCategory);
+  if (!cat) return;
+  // Sort by stable [row, col] position so buttons never move.
+  const words = [...cat.words].sort((a, b) =>
+    (a.position[0] - b.position[0]) || (a.position[1] - b.position[1]));
+  words.forEach((w) => {
+    const btn = document.createElement("button");
+    btn.className = "word-tile" + (w.text === currentWord ? " selected" : "");
+    btn.style.setProperty("--cat-color", cat.color);
+    btn.setAttribute("role", "listitem");
+    btn.setAttribute("aria-label", "Word: " + w.text);
+    btn.innerHTML = `<i class="ti ${w.icon}" aria-hidden="true"></i>${w.text}`;
+    btn.onclick = () => selectWord(w.text, cat.name);
+    grid.appendChild(btn);
+  });
+}
+
+function renderRelated(words) {
+  const section = $("related-section");
+  const chips = $("related-chips");
+  chips.innerHTML = "";
+  if (!words || !words.length) { section.style.display = "none"; return; }
+  section.style.display = "block";
+  words.forEach((w) => {
+    const chip = document.createElement("button");
+    chip.className = "related-chip";
+    chip.textContent = w;
+    chip.onclick = () => selectWord(w, currentCategory);
+    chips.appendChild(chip);
+  });
+}
+
+function sentencesLoading() {
+  $("sentences-list").innerHTML =
+    `<div class="loading-state"><div class="spinner"></div><span>Finding the words…</span></div>`;
+}
+function sentencesEmpty() {
+  $("sentences-list").innerHTML =
+    `<div class="empty-state"><i class="ti ti-message-2"></i>` +
+    `<p>Tap a word on the left and sentences will appear here.</p></div>`;
+}
+
+function renderSentences(items, word) {
+  const list = $("sentences-list");
+  list.innerHTML = "";
+  if (!items.length) { sentencesEmpty(); return; }
+  items.forEach((s) => {
+    const tile = document.createElement("div");
+    tile.className = "sentence-tile" + (s.bookmarked ? " bookmarked" : "");
+
+    const say = document.createElement("button");
+    say.className = "say";
+    say.setAttribute("aria-label", "Say: " + s.text);
+    say.innerHTML = `<i class="ti ti-volume" aria-hidden="true"></i><span>${escapeHtml(s.text)}</span>`;
+    say.onclick = () => setSentence(s.text, word);
+
+    const star = document.createElement("button");
+    star.className = "btn-star" + (s.bookmarked ? " on" : "");
+    star.setAttribute("aria-label", s.bookmarked ? "Remove bookmark" : "Bookmark sentence");
+    star.innerHTML = `<i class="ti ${s.bookmarked ? "ti-star-filled" : "ti-star"}"></i>`;
+    star.onclick = (e) => { e.stopPropagation(); toggleBookmark(s, word, tile, star); };
+
+    tile.appendChild(say);
+    tile.appendChild(star);
+    list.appendChild(tile);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ── Core interaction: word → sentences ───────────────────────────────────────
+async function selectWord(word, category) {
+  currentWord = word;
+  $("head-word").textContent = word;
+  renderWords();
+  sentencesLoading();
+  renderRelated(null);
+  try {
+    const data = await api("/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word, category }),
+    });
+    setConn("online");
+    cacheSentences(word, data);
+    renderSentences(data.sentences, word);
+    renderRelated(data.related_words);
+  } catch (e) {
+    setConn("offline");
+    const cached = getCachedSentences(word);
+    if (cached) {
+      renderSentences(cached.sentences, word);
+      renderRelated(cached.related_words);
+    } else {
+      $("sentences-list").innerHTML =
+        `<div class="empty-state"><i class="ti ti-cloud-off"></i>` +
+        `<p>Can't reach the speech computer. Check it's on and the address in settings.</p></div>`;
+    }
+  }
+}
+
+function cacheSentences(word, data) {
+  const cache = JSON.parse(localStorage.getItem("sentCache") || "{}");
+  cache[word.toLowerCase()] = data;
+  localStorage.setItem("sentCache", JSON.stringify(cache));
+}
+function getCachedSentences(word) {
+  const cache = JSON.parse(localStorage.getItem("sentCache") || "{}");
+  return cache[word.toLowerCase()];
+}
+
+// ── Sentence selection + speech ──────────────────────────────────────────────
+function setSentence(text, word) {
+  selectedSentence = text;
+  $("output-text").textContent = text;
+  $("btn-speak").disabled = false;
+  speak(text);
+  // Best-effort usage log; ignore failures.
+  api("/speak-log", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, word: word || currentWord }),
+  }).catch(() => {});
+}
+
+function speak(text) {
+  if (!text || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.9; utt.pitch = 1.0;
+  window.speechSynthesis.speak(utt);
+}
+function speakOutput() { if (selectedSentence) speak(selectedSentence); }
+function clearOutput() {
+  selectedSentence = "";
+  $("output-text").innerHTML = `<span class="output-placeholder">Tap a word, then a sentence below…</span>`;
+  $("btn-speak").disabled = true;
+}
+
+// ── Bookmarks ────────────────────────────────────────────────────────────────
+async function toggleBookmark(sentence, word, tile, star) {
+  const existing = bookmarkFor(sentence.text, word);
+  try {
+    if (existing) {
+      await api("/bookmarks/" + existing.id, { method: "DELETE" });
+      bookmarks = bookmarks.filter((b) => b.id !== existing.id);
+      sentence.bookmarked = false;
+    } else {
+      const created = await api("/bookmarks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: sentence.text, word, category: currentCategory }),
+      });
+      bookmarks.push(created);
+      sentence.bookmarked = true;
+    }
+    localStorage.setItem("bookmarksCache", JSON.stringify(bookmarks));
+    star.classList.toggle("on", sentence.bookmarked);
+    star.innerHTML = `<i class="ti ${sentence.bookmarked ? "ti-star-filled" : "ti-star"}"></i>`;
+    tile.classList.toggle("bookmarked", sentence.bookmarked);
+  } catch (e) {
+    setConn("offline");
+  }
+}
+
+// ── Dictate (browser speech recognition for the web client) ──────────────────
+function toggleMic() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) { alert("Speech recognition isn't supported in this browser. Try Chrome or Edge."); return; }
+  const btn = $("mic-btn");
+  if (micActive) {
+    micActive = false; btn.classList.remove("recording");
+    if (window._sr) { window._sr.stop(); window._sr = null; }
+    return;
+  }
+  micActive = true; btn.classList.add("recording");
+  const sr = new SpeechRec();
+  sr.lang = "en-US"; sr.interimResults = false; sr.continuous = false;
+  sr.onresult = (e) => {
+    const t = (e.results[0][0].transcript || "").trim();
+    if (t) selectWord(t.split(/\s+/)[0], currentCategory);
+  };
+  sr.onend = () => { micActive = false; btn.classList.remove("recording"); window._sr = null; };
+  sr.onerror = () => { micActive = false; btn.classList.remove("recording"); window._sr = null; };
+  sr.start(); window._sr = sr;
+}
+
+// ── Photo → vision ────────────────────────────────────────────────────────────
+function triggerPhoto() { $("photo-input").click(); }
+async function handlePhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  input.value = "";
+  currentWord = null;
+  $("head-word").textContent = "photo";
+  sentencesLoading();
+  renderRelated(null);
+  try {
+    const fd = new FormData();
+    fd.append("image", file);
+    const res = await fetch(backendUrl.replace(/\/$/, "") + "/vision", { method: "POST", body: fd });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    setConn("online");
+    $("head-word").textContent = data.identified_object;
+    currentWord = data.identified_object;
+    renderSentences(data.sentences, data.identified_object);
+    renderRelated(data.related_words);
+  } catch (e) {
+    setConn("offline");
+    $("sentences-list").innerHTML =
+      `<div class="empty-state"><i class="ti ti-cloud-off"></i><p>Couldn't identify the photo.</p></div>`;
+  }
+}
+
+// ── Keyboard overlay ──────────────────────────────────────────────────────────
+function toggleKeyboard() {
+  if (settingsOpen) toggleSettings();
+  kbOpen = !kbOpen;
+  $("kb-overlay").classList.toggle("open", kbOpen);
+  if (kbOpen) setTimeout(() => $("kb-input").focus(), 250);
+}
+function addFromKeyboard() {
+  const input = $("kb-input");
+  const val = input.value.trim();
+  if (val) { selectWord(val, currentCategory); input.value = ""; toggleKeyboard(); }
+}
+
+// ── Settings overlay ──────────────────────────────────────────────────────────
+function toggleSettings() {
+  if (kbOpen) toggleKeyboard();
+  settingsOpen = !settingsOpen;
+  $("settings-overlay").classList.toggle("open", settingsOpen);
+  if (settingsOpen) $("backend-input").value = backendUrl;
+}
+function saveBackend() {
+  const val = $("backend-input").value.trim();
+  if (val) { backendUrl = val; localStorage.setItem("backendUrl", val); }
+  toggleSettings();
+  init();
+}
+
+// Minimal offline fallback grid if the backend was never reached.
+const FALLBACK_WORDS = [
+  { name: "Needs", color: "#4CAF50", words: [
+    { text: "water", icon: "ti-droplet", position: [0,0] },
+    { text: "food", icon: "ti-soup", position: [0,1] },
+    { text: "bathroom", icon: "ti-toilet-paper", position: [0,2] },
+    { text: "medicine", icon: "ti-pill", position: [1,0] },
+    { text: "rest", icon: "ti-bed", position: [1,1] },
+    { text: "help", icon: "ti-help", position: [1,2] },
+  ]},
+];
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function init() {
+  sentencesEmpty();
+  await loadWords();
+  await loadBookmarks();
+}
+init();
+</script>
+</body>
+</html>
