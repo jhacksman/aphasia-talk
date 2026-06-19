@@ -1,0 +1,31 @@
+"""Runtime configuration, read from environment variables."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Upstream inference services.
+    vllm_url: str = "http://vllm:8000"
+    vllm_model: str = "Qwen/Qwen3.6-35B-A3B-FP8"
+    whisper_url: str = "http://whisper:8001"
+
+    # When true, the backend fabricates plausible sentences / transcriptions
+    # instead of calling vLLM and whisper.cpp. Lets the API run with no GPU.
+    mock_inference: bool = True
+
+    # SQLite database location.
+    database_path: str = str(_DATA_DIR / "aphasia_talk.db")
+
+    # Generation tuning.
+    request_timeout: float = 30.0
+    max_sentences: int = 8
+
+
+settings = Settings()

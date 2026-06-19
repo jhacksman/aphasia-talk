@@ -1,0 +1,12 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.env
+
+# SQLite data
+backend/app/data/*.db
+data/
+
+# OS
+.DS_Store
