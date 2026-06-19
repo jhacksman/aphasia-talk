@@ -52,68 +52,48 @@ class Profile:
 
 # ── Era profiles ─────────────────────────────────────────────────────────────
 # Keyed by the *formative decade* (birth_year + FORMATIVE_OFFSET, floored to a
-# decade). Each entry is a short steer on register, warmth, and a few era-true
-# turns of phrase — deliberately modest. These are authored guidance for the
-# model, not an exhaustive lexicon, and are meant to bias tone, not to costume.
+# decade). Each entry steers *register only* — formality, warmth, and avoiding
+# anachronistic modern slang. Deliberately no catchphrases, no quoted "period"
+# expressions, no dialect spelling: the goal is a real person speaking
+# naturally, lightly inflected by when they grew up — never a costume.
 ERA_PROFILES: dict[int, str] = {
     1940: (
-        "Her formative years were the 1940s. Favor warm, gracious, somewhat "
-        "formal phrasing. Courtesies like \"please\", \"thank you kindly\", and "
-        "\"I'd be much obliged\" fit naturally. Understated about discomfort "
-        "(\"I'm not quite myself today\"). Avoid modern slang entirely."
+        "She grew up in the 1940s. Her phrasing leans slightly formal and "
+        "courteous, in complete sentences. Keep vocabulary timeless; avoid "
+        "modern slang and internet-era phrasing."
     ),
     1950: (
-        "Her formative years were the 1950s. Polite, friendly, a little formal. "
-        "Gentle expressions like \"oh my\", \"goodness\", \"that would be lovely\", "
-        "\"I'd appreciate it\". Modest and uncomplaining in tone. No modern slang."
+        "She grew up in the 1950s. Her phrasing is warm and polite, a touch "
+        "formal. Use plain mid-century everyday vocabulary; avoid modern slang."
     ),
     1960: (
-        "Her formative years were the 1960s. Warm and plain-spoken with an easy, "
-        "informal friendliness. \"That's fine\", \"I'd love that\", \"no trouble at "
-        "all\" fit well. Sincere rather than effusive. Avoid 21st-century idioms."
+        "She grew up in the 1960s. Her phrasing is warm and plain-spoken, "
+        "relaxed but not slangy. Avoid 21st-century idioms."
     ),
     1970: (
-        "Her formative years were the 1970s. Relaxed, direct, and warm. Casual "
-        "phrasing like \"that's great\", \"I really need...\", \"thanks so much\" "
-        "fits. Comfortable and unfussy. Avoid current internet-era slang."
+        "She grew up in the 1970s. Her phrasing is relaxed, direct, and warm — "
+        "ordinary everyday English. Avoid current internet-era slang."
     ),
     1980: (
-        "Her formative years were the 1980s. Friendly, conversational, direct. "
-        "Everyday phrasing like \"I'd really like...\", \"that works for me\", "
-        "\"thanks a lot\". Keep it natural and contemporary to that era."
+        "She grew up in the 1980s. Her phrasing is friendly and conversational, "
+        "plain everyday English. Avoid trendy current slang."
     ),
     1990: (
-        "Her formative years were the 1990s. Casual, warm, straightforward "
-        "everyday English. Keep phrasing natural and unforced."
+        "She grew up in the 1990s. Her phrasing is casual, warm, and "
+        "straightforward. Keep it natural and unforced."
     ),
 }
-_DEFAULT_ERA = (
-    "Use natural, warm, everyday English. Keep phrasing plain, sincere, and "
-    "easy to recognize."
-)
+_DEFAULT_ERA = "Use natural, warm, everyday English. Keep phrasing plain and realistic."
 
 # ── Region profiles ──────────────────────────────────────────────────────────
-# Light dialect/register steer. Free-text regions fall through to a generic note.
+# A very light register note only. No dialect tokens or stock phrases — the
+# sentences must still sound like a real person, not a regional impression.
 REGION_PROFILES: dict[str, str] = {
-    "us-south": (
-        "She is from the American South; gentle Southern warmth fits "
-        "(\"y'all\", \"bless you\", \"I reckon\", \"sugar\") — used sparingly and "
-        "only where it sounds natural."
-    ),
-    "us-northeast": (
-        "She is from the American Northeast; plain, direct, unsentimental warmth."
-    ),
-    "us-midwest": (
-        "She is from the American Midwest; friendly, modest, understated "
-        "(\"oh, that's no bother\", \"you bet\")."
-    ),
-    "us-west": (
-        "She is from the American West; easygoing, informal, warm."
-    ),
-    "uk": (
-        "She is British; understated, polite phrasing fits (\"lovely\", \"I'm "
-        "quite alright\", \"would you mind...\"). Avoid Americanisms."
-    ),
+    "us-south": "She is from the American South; a gentle, warm register fits — but keep it natural, with no heavy dialect or stock phrases.",
+    "us-northeast": "She is from the American Northeast; plain, direct warmth.",
+    "us-midwest": "She is from the American Midwest; friendly, modest, understated.",
+    "us-west": "She is from the American West; easygoing and informal.",
+    "uk": "She is British; phrasing skews a little more understated and formal than American English. Avoid heavy dialect.",
 }
 
 
@@ -169,8 +149,9 @@ def compose_system_prompt(base_prompt: str, profile: Profile) -> str:
             f"{profile.idiolect_notes.strip()}"
         )
     lines.append(
-        "- Treat all of the above as a gentle bias on tone, warmth, formality, "
-        "and word choice — not as costume. Never force dated slang or "
-        "caricature. Clarity for the listener always comes first."
+        "- Apply the above as a very light touch on register only. The sentences "
+        "must sound like a real person speaking naturally — never a period "
+        "performance, never dialect spelling, catchphrases, or dated slang. When "
+        "in doubt, phrase it plainly. Realism and clarity come first."
     )
     return base_prompt + "\n" + "\n".join(lines)
