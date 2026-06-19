@@ -361,6 +361,23 @@
   <div class="ov-row">
     <input class="ov-input" id="backend-input" type="text" placeholder="http://192.168.1.50:8080" autocomplete="off"/>
     <button class="ov-btn" onclick="saveBackend()">Save</button>
+  </div>
+
+  <div class="ov-row" style="margin-top:14px"><label class="ov-label">Her voice — helps the AI phrase things the way she would</label></div>
+  <div class="ov-row">
+    <input class="ov-input" id="prof-name" type="text" placeholder="Name (optional)" autocomplete="off" style="flex:2"/>
+    <input class="ov-input" id="prof-year" type="number" min="1900" max="2030" placeholder="Birth year" autocomplete="off" style="flex:1"/>
+  </div>
+  <div class="ov-row">
+    <select class="ov-input" id="prof-region">
+      <option value="">Region (optional)</option>
+      <option value="us-south">US — South</option>
+      <option value="us-northeast">US — Northeast</option>
+      <option value="us-midwest">US — Midwest</option>
+      <option value="us-west">US — West</option>
+      <option value="uk">United Kingdom</option>
+    </select>
+    <button class="ov-btn" onclick="saveProfile()">Save voice</button>
     <button class="ov-btn secondary" onclick="toggleSettings()">Close</button>
   </div>
 </div>
@@ -682,13 +699,38 @@ function toggleSettings() {
   if (kbOpen) toggleKeyboard();
   settingsOpen = !settingsOpen;
   $("settings-overlay").classList.toggle("open", settingsOpen);
-  if (settingsOpen) $("backend-input").value = backendUrl;
+  if (settingsOpen) { $("backend-input").value = backendUrl; loadProfile(); }
 }
 function saveBackend() {
   const val = $("backend-input").value.trim();
   if (val) { backendUrl = val; localStorage.setItem("backendUrl", val); }
-  toggleSettings();
   init();
+}
+
+async function loadProfile() {
+  try {
+    const p = await api("/profile");
+    $("prof-name").value = p.name || "";
+    $("prof-year").value = p.birth_year || "";
+    $("prof-region").value = p.region || "";
+  } catch (e) { /* backend unreachable; leave fields as-is */ }
+}
+async function saveProfile() {
+  const body = {
+    name: $("prof-name").value.trim() || null,
+    birth_year: parseInt($("prof-year").value, 10) || null,
+    region: $("prof-region").value || null,
+  };
+  try {
+    await api("/profile", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setConn("online");
+    // Re-fetch sentences for the current word so the new voice takes effect.
+    if (currentWord) selectWord(currentWord, currentCategory);
+    toggleSettings();
+  } catch (e) { setConn("offline"); }
 }
 
 // Minimal offline fallback grid if the backend was never reached.

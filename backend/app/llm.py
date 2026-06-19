@@ -12,9 +12,10 @@ import httpx
 
 from .config import settings
 
-# Constant system prompt — vLLM prefix-caches this across every request, which
-# is what gets time-to-first-token down to ~0.12s. Keep it byte-stable.
-SYSTEM_PROMPT = """\
+# Base system prompt. The profile layer (app/profile.py) appends a persona
+# section to this; the composed result is constant per deployment (one user),
+# so vLLM still prefix-caches it and TTFT stays ~0.12s. Keep it byte-stable.
+BASE_SYSTEM_PROMPT = """\
 You are a communication assistant for a person with aphasia (difficulty producing language) caused by Alzheimer's disease. Your job is to generate clear, natural sentences that express what she might be trying to say.
 
 Rules:
@@ -78,6 +79,7 @@ async def generate_sentences(
     category: str | None,
     bookmarked: list[str],
     history: list[str],
+    system_prompt: str = BASE_SYSTEM_PROMPT,
 ) -> tuple[list[str], list[str]]:
     if settings.mock_inference:
         return _mock_generate(word, category, bookmarked)
@@ -86,7 +88,7 @@ async def generate_sentences(
     body = {
         "model": settings.vllm_model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             # /no_think keeps Qwen3.6 in fast non-reasoning mode for low latency.
             {"role": "user", "content": user_prompt + " /no_think"},
         ],
@@ -105,7 +107,9 @@ async def generate_sentences(
     return sentences[: settings.max_sentences], related[:6]
 
 
-async def generate_from_image(image_bytes: bytes, mime: str) -> tuple[str, float, list[str], list[str]]:
+async def generate_from_image(
+    image_bytes: bytes, mime: str, system_prompt: str = BASE_SYSTEM_PROMPT
+) -> tuple[str, float, list[str], list[str]]:
     """Identify an object in a photo, then generate sentences about it."""
     if settings.mock_inference:
         obj = "cup"
@@ -120,7 +124,7 @@ async def generate_from_image(image_bytes: bytes, mime: str) -> tuple[str, float
         "messages": [
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT
+                "content": system_prompt
                 + '\nFirst identify the single main object in the image. Output JSON: '
                 + '{"identified_object": str, "confidence": float, "sentences": [...], "related_words": [...]}',
             },

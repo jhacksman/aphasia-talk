@@ -59,6 +59,11 @@ def init_db() -> None:
                 action TEXT NOT NULL,
                 timestamp TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
         seeded = conn.execute("SELECT COUNT(*) AS n FROM word_config").fetchone()["n"]
@@ -158,6 +163,23 @@ def log_usage(action: str, word: str | None = None, sentence_text: str | None = 
         conn.execute(
             "INSERT INTO usage_log (word, sentence_text, action, timestamp) VALUES (?, ?, ?, ?)",
             (word, sentence_text, action, _now_iso()),
+        )
+
+
+# ── Settings (single-user key/value, used for the linguistic profile) ────────
+
+def get_setting(key: str) -> str | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_setting(key: str, value: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO settings (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (key, value),
         )
 
 

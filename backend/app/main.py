@@ -12,19 +12,35 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import json
+
 from . import db, llm, whisper
 from .config import settings
+from .profile import Profile, compose_system_prompt, formative_decade
 from .schemas import (
     Bookmark,
     BookmarkCreate,
     BookmarkList,
     GenerateRequest,
     GenerateResponse,
+    ProfileModel,
+    ProfileResponse,
     Sentence,
     TranscribeResponse,
     VisionResponse,
     WordsResponse,
 )
+
+_PROFILE_KEY = "linguistic_profile"
+
+
+def _load_profile() -> Profile:
+    raw = db.get_setting(_PROFILE_KEY)
+    return Profile.from_dict(json.loads(raw)) if raw else Profile()
+
+
+def _active_system_prompt() -> str:
+    return compose_system_prompt(llm.BASE_SYSTEM_PROMPT, _load_profile())
 
 app = FastAPI(title="Aphasia Talk", version="0.1.0")
 
@@ -70,6 +86,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
         category=req.category,
         bookmarked=list(bookmarked_set),
         history=history,
+        system_prompt=_active_system_prompt(),
     )
     return GenerateResponse(
         sentences=_mark_bookmarked(texts, bookmarked_set),
@@ -83,7 +100,7 @@ async def vision(image: UploadFile = File(...)) -> VisionResponse:
     if not data:
         raise HTTPException(status_code=400, detail="Empty image upload")
     obj, confidence, texts, related = await llm.generate_from_image(
-        data, image.content_type or "image/jpeg"
+        data, image.content_type or "image/jpeg", system_prompt=_active_system_prompt()
     )
     db.log_usage(action="tapped", word=obj)
     return VisionResponse(
@@ -122,6 +139,26 @@ async def remove_bookmark(bookmark_id: int) -> dict:
     if not db.delete_bookmark(bookmark_id):
         raise HTTPException(status_code=404, detail="Bookmark not found")
     return {"deleted": bookmark_id}
+
+
+@app.get("/profile", response_model=ProfileResponse)
+async def get_profile() -> ProfileResponse:
+    return _profile_response(_load_profile())
+
+
+@app.put("/profile", response_model=ProfileResponse)
+async def update_profile(req: ProfileModel) -> ProfileResponse:
+    profile = Profile.from_dict(req.model_dump())
+    db.set_setting(_PROFILE_KEY, json.dumps(profile.to_dict()))
+    return _profile_response(profile)
+
+
+def _profile_response(profile: Profile) -> ProfileResponse:
+    return ProfileResponse(
+        **profile.to_dict(),
+        formative_decade=formative_decade(profile.birth_year) if profile.birth_year else None,
+        system_prompt_preview=compose_system_prompt(llm.BASE_SYSTEM_PROMPT, profile),
+    )
 
 
 @app.post("/speak-log")

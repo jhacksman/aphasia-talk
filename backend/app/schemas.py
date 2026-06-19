@@ -65,3 +65,16 @@ class Category(BaseModel):
 
 class WordsResponse(BaseModel):
     categories: list[Category]
+
+
+class ProfileModel(BaseModel):
+    name: str | None = None
+    birth_year: int | None = Field(default=None, ge=1900, le=2030)
+    region: str | None = None
+    idiolect_notes: str | None = None
+
+
+class ProfileResponse(ProfileModel):
+    # Echo back the composed persona section so a caregiver can see the effect.
+    formative_decade: int | None = None
+    system_prompt_preview: str
