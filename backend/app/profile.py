@@ -123,7 +123,9 @@ def _region_guidance(region: str | None) -> str:
 def compose_system_prompt(base_prompt: str, profile: Profile) -> str:
     """Append a persona section to the base prompt. Deterministic ordering so
     the result is byte-stable across requests (preserves prefix caching)."""
-    if not profile or not (profile.birth_year or profile.region or profile.idiolect_notes):
+    if not profile or not (
+        profile.name or profile.birth_year or profile.region or profile.idiolect_notes
+    ):
         return base_prompt
 
     lines = ["", "Voice and idiom:"]

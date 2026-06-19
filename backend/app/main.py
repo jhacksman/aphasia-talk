@@ -33,6 +33,11 @@ from .schemas import (
 
 _PROFILE_KEY = "linguistic_profile"
 
+# The composed system prompt only changes when the profile is updated (rare,
+# single-user). Cache it so /generate and /vision don't re-read SQLite and
+# re-compose on every request — keeping the byte-stable prefix vLLM caches.
+_prompt_cache: str | None = None
+
 
 def _load_profile() -> Profile:
     raw = db.get_setting(_PROFILE_KEY)
@@ -40,7 +45,15 @@ def _load_profile() -> Profile:
 
 
 def _active_system_prompt() -> str:
-    return compose_system_prompt(llm.BASE_SYSTEM_PROMPT, _load_profile())
+    global _prompt_cache
+    if _prompt_cache is None:
+        _prompt_cache = compose_system_prompt(llm.BASE_SYSTEM_PROMPT, _load_profile())
+    return _prompt_cache
+
+
+def _invalidate_prompt_cache() -> None:
+    global _prompt_cache
+    _prompt_cache = None
 
 app = FastAPI(title="Aphasia Talk", version="0.1.0")
 
@@ -103,10 +116,12 @@ async def vision(image: UploadFile = File(...)) -> VisionResponse:
         data, image.content_type or "image/jpeg", system_prompt=_active_system_prompt()
     )
     db.log_usage(action="tapped", word=obj)
+    # Reflect any sentences the user already bookmarked for this object.
+    bookmarked_set = set(db.bookmarked_texts_for_word(obj))
     return VisionResponse(
         identified_object=obj,
         confidence=confidence,
-        sentences=_mark_bookmarked(texts, set()),
+        sentences=_mark_bookmarked(texts, bookmarked_set),
         related_words=related,
     )
 
@@ -148,8 +163,13 @@ async def get_profile() -> ProfileResponse:
 
 @app.put("/profile", response_model=ProfileResponse)
 async def update_profile(req: ProfileModel) -> ProfileResponse:
-    profile = Profile.from_dict(req.model_dump())
+    # Merge only the fields the client actually sent, so a partial update (e.g.
+    # the UI form, which never sends idiolect_notes) doesn't wipe stored fields.
+    merged = _load_profile().to_dict()
+    merged.update(req.model_dump(exclude_unset=True))
+    profile = Profile.from_dict(merged)
     db.set_setting(_PROFILE_KEY, json.dumps(profile.to_dict()))
+    _invalidate_prompt_cache()
     return _profile_response(profile)
 
 

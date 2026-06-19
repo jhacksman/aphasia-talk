@@ -103,7 +103,12 @@ async def generate_sentences(
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
 
-    sentences, related = _coerce_payload(_extract_json(content))
+    try:
+        sentences, related = _coerce_payload(_extract_json(content))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        # Truncated (max_tokens) or non-JSON output: degrade to empty rather
+        # than 500, so the client can show a "tap again" state.
+        return [], []
     return sentences[: settings.max_sentences], related[:6]
 
 
@@ -145,10 +150,17 @@ async def generate_from_image(
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
 
-    raw = _extract_json(content)
-    sentences, related = _coerce_payload(raw)
-    obj = str(raw.get("identified_object", "this")).strip() or "this"
-    confidence = float(raw.get("confidence", 0.8))
+    try:
+        raw = _extract_json(content)
+        sentences, related = _coerce_payload(raw)
+        obj = str(raw.get("identified_object", "this")).strip() or "this"
+        try:
+            confidence = float(raw.get("confidence", 0.8))
+        except (ValueError, TypeError):
+            # Vision models often report qualitative confidence ("high").
+            confidence = 0.8
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return "this", 0.0, [], []
     return obj, confidence, sentences[: settings.max_sentences], related[:6]
 
 
