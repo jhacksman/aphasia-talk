@@ -716,9 +716,18 @@ async function loadProfile() {
   } catch (e) { /* backend unreachable; leave fields as-is */ }
 }
 async function saveProfile() {
+  const yearRaw = $("prof-year").value.trim();
+  let birthYear = null;
+  if (yearRaw !== "") {
+    birthYear = parseInt(yearRaw, 10);
+    if (isNaN(birthYear) || birthYear < 1900 || birthYear > 2030) {
+      alert("Please enter a birth year between 1900 and 2030, or leave it blank.");
+      return;
+    }
+  }
   const body = {
     name: $("prof-name").value.trim() || null,
-    birth_year: parseInt($("prof-year").value, 10) || null,
+    birth_year: birthYear,
     region: $("prof-region").value || null,
   };
   try {

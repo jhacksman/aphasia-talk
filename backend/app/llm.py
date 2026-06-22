@@ -12,6 +12,25 @@ import httpx
 
 from .config import settings
 
+# Reused across requests so the connection to vLLM stays warm (keep-alive),
+# rather than paying TCP/TLS setup on every /generate call. Created lazily so
+# importing this module has no side effects.
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=settings.request_timeout)
+    return _client
+
+
+async def aclose() -> None:
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
+
 # Base system prompt. The profile layer (app/profile.py) appends a persona
 # section to this; the composed result is constant per deployment (one user),
 # so vLLM still prefix-caches it and TTFT stays ~0.12s. Keep it byte-stable.
@@ -96,12 +115,11 @@ async def generate_sentences(
         "max_tokens": 600,
         "response_format": {"type": "json_object"},
     }
-    async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-        resp = await client.post(
-            f"{settings.vllm_url}/v1/chat/completions", json=body
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+    resp = await _get_client().post(
+        f"{settings.vllm_url}/v1/chat/completions", json=body
+    )
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
 
     try:
         sentences, related = _coerce_payload(_extract_json(content))
@@ -145,10 +163,9 @@ async def generate_from_image(
         "max_tokens": 700,
         "response_format": {"type": "json_object"},
     }
-    async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-        resp = await client.post(f"{settings.vllm_url}/v1/chat/completions", json=body)
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+    resp = await _get_client().post(f"{settings.vllm_url}/v1/chat/completions", json=body)
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
 
     try:
         raw = _extract_json(content)
