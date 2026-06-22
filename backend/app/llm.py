@@ -201,6 +201,12 @@ _EMOTIONAL = {
     "family": ["Please call my family.", "I want to see my family.", "Tell them I love them."],
     "confused": ["I feel confused.", "Can you explain it again?", "I am not sure where I am."],
     "frustrated": ["I feel frustrated.", "This is hard for me.", "Please be patient with me."],
+    "hello": ["Hello, it's good to see you.", "Hi there.", "I'm glad you're here."],
+    "goodbye": ["Goodbye for now.", "I'll miss you.", "See you soon."],
+    "thank you": ["Thank you so much.", "I really appreciate that.", "You are very kind."],
+    "sorry": ["I'm sorry.", "I didn't mean to.", "Please forgive me."],
+    "please": ["Please help me.", "If you could, please.", "I would really appreciate it."],
+    "okay": ["Okay, that's fine.", "I understand.", "That works for me."],
 }
 
 _RELATED = {
@@ -213,6 +219,12 @@ _RELATED = {
     "pain": ["medicine", "doctor", "help", "hurt", "head", "back"],
     "family": ["call", "visit", "love", "phone", "home", "miss"],
     "love": ["family", "hug", "thank you", "happy", "you", "together"],
+    "hello": ["goodbye", "friend", "family", "happy", "you", "come"],
+    "goodbye": ["hello", "love", "later", "miss", "family", "soon"],
+    "thank you": ["please", "happy", "love", "help", "kind", "good"],
+    "sorry": ["please", "help", "confused", "sad", "okay", "understand"],
+    "please": ["help", "thank you", "water", "need", "now", "want"],
+    "okay": ["yes", "no", "good", "understand", "fine", "thank you"],
 }
 
 
