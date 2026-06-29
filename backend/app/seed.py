@@ -68,4 +68,12 @@ SEED_WORDS = {
         ("before", "ti-arrow-back", 1, 1),
         ("later", "ti-arrow-forward", 1, 2),
     ],
+    "Social": [
+        ("hello", "ti-hand-wave", 0, 0),
+        ("goodbye", "ti-door-exit", 0, 1),
+        ("thank you", "ti-heart-handshake", 0, 2),
+        ("sorry", "ti-mood-sorry", 1, 0),
+        ("please", "ti-hand-pointing", 1, 1),
+        ("okay", "ti-circle-check", 1, 2),
+    ],
 }

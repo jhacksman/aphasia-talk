@@ -17,6 +17,19 @@ uvicorn app.main:app --reload --port 8080
 `/transcribe` return plausible fabricated data — the whole UI works without a
 DGX Spark. Open http://127.0.0.1:8080/ for the bundled web frontend.
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+The suite runs in mock-inference mode (no GPU): it covers routing, response
+shapes, SQLite persistence, bookmark pinning, profile composition, and the
+real-mode JSON-parsing resilience guards (via a fake vLLM client). It does
+**not** verify real model output — that requires the Spark stack. CI runs
+this on every push and PR.
+
 ## Run on the DGX Spark (real models)
 
 Set `MOCK_INFERENCE=false` and point `VLLM_URL` / `WHISPER_URL` at the running

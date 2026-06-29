@@ -6,13 +6,13 @@ LAN; no auth, no multi-tenancy.
 """
 from __future__ import annotations
 
+import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
-import json
 
 from . import db, llm, whisper
 from .config import settings
@@ -55,7 +55,14 @@ def _invalidate_prompt_cache() -> None:
     global _prompt_cache
     _prompt_cache = None
 
-app = FastAPI(title="Aphasia Talk", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db.init_db()
+    yield
+    await llm.aclose()
+
+
+app = FastAPI(title="Aphasia Talk", version="0.1.0", lifespan=lifespan)
 
 # Tablet connects over LAN; allow any origin since there is no auth surface.
 app.add_middleware(
@@ -64,11 +71,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    db.init_db()
 
 
 def _mark_bookmarked(texts: list[str], bookmarked: set[str]) -> list[Sentence]:

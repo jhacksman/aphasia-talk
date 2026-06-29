@@ -8,5 +8,16 @@ __pycache__/
 backend/app/data/*.db
 data/
 
+# Flutter
+mobile_app/.dart_tool/
+mobile_app/.packages
+mobile_app/build/
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+mobile_app/android/.gradle/
+mobile_app/ios/Pods/
+mobile_app/ios/.symlinks/
+*.iml
+
 # OS
 .DS_Store
