@@ -1,8 +1,10 @@
 name: CI
 
+# pull_request covers all PR branches; push is limited to the default branch
+# so same-repo PRs don't run every job twice (the macOS job bills at 10x).
 on:
   push:
-    branches: ["**"]
+    branches: [devin/1781755123-project-spec]
   pull_request:
 
 jobs:

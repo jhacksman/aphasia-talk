@@ -97,7 +97,8 @@ class SentencesPane extends StatelessWidget {
             final sentence = state.sentences[i];
             return _SentenceTile(
               text: sentence.text,
-              bookmarked: sentence.bookmarked || state.isBookmarked(sentence.text),
+              // Same predicate toggleBookmark uses — display and action agree.
+              bookmarked: state.isStarred(sentence),
               onSpeak: () => state.speakSentence(sentence.text),
               onToggleBookmark: () => state.toggleBookmark(sentence),
             );

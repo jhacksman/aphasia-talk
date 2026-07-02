@@ -131,30 +131,70 @@ class AppState extends ChangeNotifier {
 
   bool isBookmarked(String text) => bookmarks.any((b) => b.text == text);
 
+  /// Single source of truth for the star UI: the server flag on the sentence
+  /// OR a local bookmark record. toggleBookmark uses the same predicate, so
+  /// display and action can never disagree.
+  bool isStarred(Sentence sentence) =>
+      sentence.bookmarked || isBookmarked(sentence.text);
+
+  /// Sentences currently being toggled — blocks double-taps (likely with
+  /// impaired motor control) from firing duplicate add/delete requests.
+  final Set<String> _togglesInFlight = {};
+
   Future<void> toggleBookmark(Sentence sentence) async {
-    final existing = bookmarks.where((b) => b.text == sentence.text).toList();
+    if (!_togglesInFlight.add(sentence.text)) return;
     try {
-      if (existing.isNotEmpty) {
-        await api.deleteBookmark(existing.first.id);
-        bookmarks = bookmarks.where((b) => b.id != existing.first.id).toList();
+      if (isStarred(sentence)) {
+        await _removeBookmark(sentence);
       } else {
-        final created = await api.addBookmark(
-          sentence.text,
-          currentWord ?? '',
-          category: currentCategory,
-        );
-        bookmarks = [...bookmarks, created];
+        await _addBookmark(sentence);
       }
-      sentences = [
-        for (final s in sentences)
-          s.text == sentence.text ? s.copyWith(bookmarked: existing.isEmpty) : s,
-      ];
       await settings.cacheBookmarks(bookmarks);
       _setConnection(ConnectionStatus.online);
-    } on ApiException {
-      _setConnection(ConnectionStatus.offline);
+    } on ApiException catch (e) {
+      // Only a network-level failure means offline; a 4xx answer means the
+      // backend is reachable and simply rejected this request.
+      if (!e.isServerResponse) _setConnection(ConnectionStatus.offline);
+    } finally {
+      _togglesInFlight.remove(sentence.text);
+      notifyListeners();
     }
-    notifyListeners();
+  }
+
+  Future<void> _addBookmark(Sentence sentence) async {
+    final word = (currentWord ?? '').trim().isEmpty ? 'this' : currentWord!;
+    final created =
+        await api.addBookmark(sentence.text, word, category: currentCategory);
+    bookmarks = [...bookmarks, created];
+    _setSentenceFlag(sentence.text, true);
+  }
+
+  Future<void> _removeBookmark(Sentence sentence) async {
+    var matches = bookmarks.where((b) => b.text == sentence.text).toList();
+    if (matches.isEmpty) {
+      // Starred via the server flag but missing locally (fresh install or a
+      // stale cache) — refresh the list to find the record to delete.
+      bookmarks = await api.fetchBookmarks();
+      matches = bookmarks.where((b) => b.text == sentence.text).toList();
+    }
+    for (final match in matches) {
+      try {
+        await api.deleteBookmark(match.id);
+      } on ApiException catch (e) {
+        // 404 = already gone (deleted from another device) — that's success.
+        if (e.statusCode != 404) rethrow;
+      }
+    }
+    final removedIds = matches.map((b) => b.id).toSet();
+    bookmarks = bookmarks.where((b) => !removedIds.contains(b.id)).toList();
+    _setSentenceFlag(sentence.text, false);
+  }
+
+  void _setSentenceFlag(String text, bool bookmarked) {
+    sentences = [
+      for (final s in sentences)
+        s.text == text ? s.copyWith(bookmarked: bookmarked) : s,
+    ];
   }
 
   /// Photo flow: send image bytes, treat the identified object as the word.
@@ -184,9 +224,14 @@ class AppState extends ChangeNotifier {
 
   /// Dictation flow: transcribe recorded audio, then run the word flow.
   Future<String?> submitDictation(List<int> audioBytes, {String format = 'wav'}) async {
+    // Participate in the same ordering as word taps: if she taps a grid word
+    // while transcription is in flight, the dictation result is stale and
+    // must not clobber the newer selection.
+    final seq = _requestSeq;
     try {
       final result = await api.transcribe(audioBytes, format: format);
       _setConnection(ConnectionStatus.online);
+      if (seq != _requestSeq) return null; // Superseded by a newer tap.
       final text = result.text.trim();
       if (text.isEmpty) return null;
       // Use the first word she said as the generation seed.
@@ -199,17 +244,29 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> updateBackendUrl(String url) async {
+  /// Returns true if the new backend answered a quick health probe. On an
+  /// unreachable address we still save the URL but skip the full reload, so
+  /// a typo fails in ~6s instead of stacking 30s request timeouts.
+  Future<bool> updateBackendUrl(String url) async {
     await settings.setBackendUrl(url);
     api.baseUrl = url;
     connection = ConnectionStatus.unknown;
     notifyListeners();
+    final reachable = await api.health();
+    if (!reachable) {
+      _setConnection(ConnectionStatus.offline);
+      return false;
+    }
     await init();
+    return true;
   }
 
   void _setConnection(ConnectionStatus status) {
     if (connection != status) {
       connection = status;
+      // The dot must update even on paths that don't otherwise notify
+      // (e.g. a failed dictation never reaches selectWord's notify).
+      notifyListeners();
     }
   }
 }

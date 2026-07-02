@@ -4,6 +4,10 @@
     <!-- Dictation: record a short clip, send to /transcribe. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
+    <!-- usesCleartextTraffic: the backend is plain HTTP on a user-configured
+         LAN address. Android's networkSecurityConfig can't scope cleartext to
+         private IP ranges, so this is app-wide by necessity (iOS is scoped
+         via NSAllowsLocalNetworking). Keep the backend on the home LAN. -->
     <application
         android:label="Aphasia Talk"
         android:name="${applicationName}"

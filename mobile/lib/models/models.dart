@@ -106,8 +106,11 @@ class VisionResult {
 
   factory VisionResult.fromJson(Map<String, dynamic> json) {
     final gen = GenerateResult.fromJson(json);
+    final rawObject = ((json['identified_object'] as String?) ?? '').trim();
     return VisionResult(
-      identifiedObject: (json['identified_object'] as String?) ?? 'this',
+      // Guard the empty string too, not just a missing key — an empty word
+      // would 422 on bookmark saves downstream (BookmarkCreate min_length=1).
+      identifiedObject: rawObject.isEmpty ? 'this' : rawObject,
       confidence: ((json['confidence'] as num?) ?? 0).toDouble(),
       sentences: gen.sentences,
       relatedWords: gen.relatedWords,

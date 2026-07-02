@@ -56,6 +56,11 @@ class SettingsService {
     }
   }
 
+  /// Most-recently-used words kept in the offline sentence cache. Bounds
+  /// disk/memory growth on a device used daily for years; 200 words is far
+  /// more than the full seeded grid plus related-word taps.
+  static const int maxCachedWords = 200;
+
   Future<void> cacheSentences(String word, GenerateResult result) async {
     Map<String, dynamic> map;
     try {
@@ -63,7 +68,13 @@ class SettingsService {
     } catch (_) {
       map = {};
     }
+    // Re-insert to move the word to the end (Dart maps preserve insertion
+    // order), then evict from the front — oldest first.
+    map.remove(word.toLowerCase());
     map[word.toLowerCase()] = result.toJson();
+    while (map.length > maxCachedWords) {
+      map.remove(map.keys.first);
+    }
     await _prefs.setString(_kSentenceCache, jsonEncode(map));
   }
 

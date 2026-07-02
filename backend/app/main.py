@@ -58,6 +58,9 @@ def _invalidate_prompt_cache() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    # The DB may have been swapped/reseeded since the last lifecycle (tests,
+    # restores) — never serve a persona composed from the previous database.
+    _invalidate_prompt_cache()
     yield
     await llm.aclose()
 

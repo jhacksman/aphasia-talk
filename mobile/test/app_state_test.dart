@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:aphasia_talk/models/models.dart';
 import 'package:aphasia_talk/services/api_service.dart';
 import 'package:aphasia_talk/services/settings_service.dart';
 import 'package:aphasia_talk/services/tts_service.dart';
@@ -128,6 +129,145 @@ void main() {
     await state.speakSentence('I am thirsty.');
     expect(state.selectedSentence, 'I am thirsty.');
     expect((state.tts as _FakeTts).spoken, ['I am thirsty.']);
+  });
+
+  test('server-pinned star with empty local list deletes instead of re-adding', () async {
+    // Fresh install: /generate returns bookmarked=true but the local
+    // bookmarks list is empty. Tapping the star must DELETE, not POST.
+    final calls = <String>[];
+    final client = MockClient((request) async {
+      calls.add('${request.method} ${request.url.path}');
+      switch ('${request.method} ${request.url.path}') {
+        case 'POST /generate':
+          return http.Response(
+            jsonEncode({
+              'sentences': [
+                {'text': 'Please get me water.', 'bookmarked': true},
+              ],
+              'related_words': <String>[],
+            }),
+            200,
+          );
+        case 'GET /bookmarks':
+          return http.Response(
+            jsonEncode({
+              'bookmarks': [
+                {'id': 3, 'text': 'Please get me water.', 'word': 'water'},
+              ],
+            }),
+            200,
+          );
+        case 'DELETE /bookmarks/3':
+          return http.Response(jsonEncode({'deleted': 3}), 200);
+        default:
+          return http.Response('{}', 200);
+      }
+    });
+
+    final state = await buildState(client);
+    await state.selectWord('water');
+    expect(state.isStarred(state.sentences.single), isTrue);
+
+    await state.toggleBookmark(state.sentences.single);
+
+    expect(calls, contains('DELETE /bookmarks/3'));
+    expect(calls.where((c) => c == 'POST /bookmarks'), isEmpty,
+        reason: 'must not re-add an already-bookmarked sentence');
+    expect(state.isStarred(state.sentences.single), isFalse);
+  });
+
+  test('DELETE 404 counts as removed and does not flip the app offline', () async {
+    final client = MockClient((request) async {
+      if (request.method == 'DELETE') {
+        return http.Response('{"detail": "Bookmark not found"}', 404);
+      }
+      return http.Response(jsonEncode({'bookmarks': [], 'categories': []}), 200);
+    });
+
+    final state = await buildState(client);
+    await state.init();
+    state.bookmarks = [
+      const Bookmark(id: 9, text: 'I am tired.', word: 'rest'),
+    ];
+
+    await state.toggleBookmark(const Sentence(text: 'I am tired.'));
+
+    expect(state.bookmarks, isEmpty, reason: 'stale bookmark cleared locally');
+    expect(state.connection, ConnectionStatus.online,
+        reason: 'a 404 answer proves the backend is reachable');
+  });
+
+  test('double-tapping the star fires a single add request', () async {
+    var posts = 0;
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path == '/bookmarks') {
+        posts += 1;
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        return http.Response(
+          jsonEncode({
+            'id': posts,
+            'text': 'I am thirsty.',
+            'word': 'water',
+            'created_at': 'x',
+          }),
+          200,
+        );
+      }
+      return http.Response(jsonEncode({'bookmarks': [], 'categories': []}), 200);
+    });
+
+    final state = await buildState(client);
+    await state.init();
+    state.currentWord = 'water';
+    const sentence = Sentence(text: 'I am thirsty.');
+
+    await Future.wait([
+      state.toggleBookmark(sentence),
+      state.toggleBookmark(sentence),
+    ]);
+
+    expect(posts, 1, reason: 'second tap during flight must be ignored');
+    expect(state.bookmarks, hasLength(1));
+  });
+
+  test('stale dictation result never clobbers a newer word tap', () async {
+    final client = MockClient((request) async {
+      if (request.url.path == '/transcribe') {
+        // Slow transcription: lands after the user has tapped a grid word.
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        return http.Response(
+            jsonEncode({'text': 'garden', 'confidence': 0.9}), 200);
+      }
+      if (request.url.path == '/generate') {
+        final word = (jsonDecode(request.body) as Map)['word'] as String;
+        return http.Response(
+          jsonEncode({
+            'sentences': [
+              {'text': 'About $word', 'bookmarked': false},
+            ],
+            'related_words': <String>[],
+          }),
+          200,
+        );
+      }
+      return http.Response(jsonEncode({'bookmarks': [], 'categories': []}), 200);
+    });
+
+    final state = await buildState(client);
+    final dictation = state.submitDictation([1, 2, 3]);
+    await state.selectWord('help'); // She gave up waiting and tapped a word.
+    final dictated = await dictation;
+
+    expect(dictated, isNull, reason: 'superseded dictation is discarded');
+    expect(state.currentWord, 'help');
+    expect(state.sentences.single.text, 'About help');
+  });
+
+  test('updateBackendUrl fails fast on an unreachable address', () async {
+    final state = await buildState(deadBackend());
+    final ok = await state.updateBackendUrl('http://10.0.0.99:8080');
+    expect(ok, isFalse);
+    expect(state.connection, ConnectionStatus.offline);
   });
 
   test('a slower earlier request never overwrites a newer tap', () async {

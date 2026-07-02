@@ -28,8 +28,12 @@ def _get_client() -> httpx.AsyncClient:
 async def aclose() -> None:
     global _client
     if _client is not None:
-        await _client.aclose()
-        _client = None
+        try:
+            await _client.aclose()
+        finally:
+            # Always drop the reference — otherwise a failed close leaves a
+            # dead client that every future request would reuse.
+            _client = None
 
 # Base system prompt. The profile layer (app/profile.py) appends a persona
 # section to this; the composed result is constant per deployment (one user),

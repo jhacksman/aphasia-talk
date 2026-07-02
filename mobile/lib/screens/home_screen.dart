@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -30,6 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _recording = false;
 
+  /// Set synchronously on entry to _toggleDictation so a double-tap (likely
+  /// with impaired motor control) can't start the recorder twice or stop a
+  /// recorder that is still starting.
+  bool _dictationBusy = false;
+
   AppState get state => widget.state;
 
   @override
@@ -39,40 +45,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _toggleDictation() async {
-    if (_recording) {
-      setState(() => _recording = false);
-      final path = await _recorder.stop();
-      if (path == null) return;
-      final bytes = await _readFileBytes(path);
-      if (bytes == null || !mounted) return;
-      final text = await state.submitDictation(bytes);
-      if (text == null && mounted) {
-        _notice('I couldn\'t hear that. Please try again.');
+    if (_dictationBusy) return;
+    _dictationBusy = true;
+    try {
+      if (_recording) {
+        await _stopDictation();
+      } else {
+        await _startDictation();
       }
-      return;
+    } finally {
+      _dictationBusy = false;
     }
+  }
+
+  Future<void> _startDictation() async {
     if (!await _recorder.hasPermission()) {
       _notice('Microphone permission is needed for dictation.');
       return;
     }
     final dir = await getTemporaryDirectory();
-    await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.wav,
-        sampleRate: 16000,
-        numChannels: 1,
-      ),
-      path: '${dir.path}/dictation.wav',
-    );
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: '${dir.path}/dictation.wav',
+      );
+    } catch (_) {
+      _notice('The microphone isn\'t available right now.');
+      return;
+    }
     if (mounted) setState(() => _recording = true);
   }
 
-  Future<List<int>?> _readFileBytes(String path) async {
-    try {
-      final file = await XFile(path).readAsBytes();
-      return file;
-    } catch (_) {
-      return null;
+  Future<void> _stopDictation() async {
+    setState(() => _recording = false);
+    final path = await _recorder.stop();
+    List<int>? bytes;
+    if (path != null) {
+      try {
+        bytes = await File(path).readAsBytes();
+      } catch (_) {
+        bytes = null;
+      }
+    }
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      // Never leave her at a silent dead-end: say what to do next.
+      _notice('I couldn\'t hear that. Please try again.');
+      return;
+    }
+    final text = await state.submitDictation(bytes);
+    if (text == null && mounted) {
+      _notice('I couldn\'t hear that. Please try again.');
     }
   }
 

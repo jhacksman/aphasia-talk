@@ -67,6 +67,16 @@ void main() {
       expect(result.confidence, closeTo(0.94, 1e-9));
       expect(result.sentences, hasLength(1));
     });
+
+    test('empty identified_object falls back to "this" (bookmark min_length)', () {
+      final result = VisionResult.fromJson({
+        'identified_object': '  ',
+        'confidence': 0.5,
+        'sentences': const [],
+        'related_words': const [],
+      });
+      expect(result.identifiedObject, 'this');
+    });
   });
 
   group('Profile', () {

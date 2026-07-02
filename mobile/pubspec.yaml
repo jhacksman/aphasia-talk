@@ -11,8 +11,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   http: ^1.2.2
+  http_parser: ^4.0.2
   flutter_tts: ^4.2.0
   shared_preferences: ^2.3.3
   record: ^7.1.1

@@ -23,6 +23,16 @@ class _SettingsSheetState extends State<SettingsSheet> {
   String? _status;
   bool _busy = false;
 
+  /// Whether the current server profile was successfully loaded into the
+  /// form. If it wasn't (backend unreachable when Settings opened), saving
+  /// must NOT send the blank fields — that would wipe the stored profile.
+  bool _profileLoaded = false;
+
+  /// A free-text region set via the API/web client that isn't one of the
+  /// dropdown presets. Preserved as its own menu entry so a mobile save
+  /// round-trips it instead of nulling it out.
+  String? _customRegion;
+
   static const _regions = <String, String>{
     'us-south': 'US — South',
     'us-northeast': 'US — Northeast',
@@ -51,12 +61,18 @@ class _SettingsSheetState extends State<SettingsSheet> {
       final profile = await widget.state.api.fetchProfile();
       if (!mounted) return;
       setState(() {
+        _profileLoaded = true;
         _nameController.text = profile.name ?? '';
         _yearController.text = profile.birthYear?.toString() ?? '';
-        _region = _regions.containsKey(profile.region) ? profile.region : null;
+        final region = profile.region;
+        if (region != null && !_regions.containsKey(region)) {
+          _customRegion = region;
+        }
+        _region = region;
       });
     } on ApiException {
-      // Backend unreachable; fields stay editable and save can retry.
+      // Backend unreachable; the voice profile stays un-editable this visit
+      // (saving blanks would wipe the stored profile).
     }
   }
 
@@ -82,17 +98,25 @@ class _SettingsSheetState extends State<SettingsSheet> {
       _status = null;
     });
 
-    await widget.state.updateBackendUrl(url);
-    final online = await widget.state.api.health();
+    // Probes with a short timeout and skips the full reload when unreachable,
+    // so a mistyped address reports failure in seconds.
+    final online = await widget.state.updateBackendUrl(url);
 
-    var profileSaved = true;
-    if (online) {
+    // If the profile never loaded, retry the load now that we're connected —
+    // never overwrite the server profile with blank fields.
+    if (online && !_profileLoaded) {
+      await _loadProfile();
+    }
+
+    var profileSaved = false;
+    if (online && _profileLoaded) {
       try {
         await widget.state.api.updateProfile(Profile(
           name: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
           birthYear: year,
           region: _region,
         ));
+        profileSaved = true;
       } on ApiException {
         profileSaved = false;
       }
@@ -102,10 +126,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
     setState(() {
       _busy = false;
       _status = !online
-          ? 'Saved address, but the speech computer didn\'t answer.'
+          ? 'Saved the address, but the speech computer didn\'t answer.'
           : profileSaved
               ? 'Connected — everything saved.'
-              : 'Connected, but the voice profile didn\'t save. Try again.';
+              : 'Connected. Voice profile loaded — check it and save again.';
     });
   }
 
@@ -174,6 +198,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              // Key forces the field to pick up the async-loaded value.
+              key: ValueKey('region-$_region-$_customRegion'),
               initialValue: _region,
               decoration: const InputDecoration(
                 labelText: 'Region (optional)',
@@ -183,6 +209,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 const DropdownMenuItem<String>(value: null, child: Text('—')),
                 for (final entry in _regions.entries)
                   DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                // A free-text region set via the web client round-trips
+                // instead of being silently erased by a mobile save.
+                if (_customRegion != null)
+                  DropdownMenuItem(value: _customRegion, child: Text(_customRegion!)),
               ],
               onChanged: (value) => setState(() => _region = value),
             ),

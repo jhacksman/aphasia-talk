@@ -14,7 +14,16 @@ val keystoreProperties = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) FileInputStream(f).use { load(it) }
 }
-val hasReleaseKeystore = keystoreProperties.containsKey("storeFile")
+val keystoreKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val hasReleaseKeystore = keystoreKeys.all(keystoreProperties::containsKey)
+// A partial key.properties would otherwise fail later with an opaque
+// null-cast during configuration; fail with the missing names instead.
+if (!hasReleaseKeystore && keystoreKeys.any(keystoreProperties::containsKey)) {
+    throw GradleException(
+        "android/key.properties is missing: " +
+            keystoreKeys.filterNot(keystoreProperties::containsKey).joinToString()
+    )
+}
 
 android {
     namespace = "net.el3ktra.aphasia_talk"
