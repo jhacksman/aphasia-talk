@@ -77,7 +77,11 @@ jobs:
           flutter-version: 3.44.4
           cache: true
 
-      - name: Build iOS (no codesign — verifies the iOS target compiles)
+      - name: Build iOS for simulator (verifies the iOS target compiles; no signing required)
+        # A *device* build requires an Apple Development Team even with
+        # --no-codesign on current Xcode; the simulator build is the standard
+        # unsigned CI compile check. Real device/TestFlight builds happen on a
+        # signing-capable Mac (see mobile/README.md).
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign
+          flutter build ios --simulator --debug
