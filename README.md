@@ -30,10 +30,14 @@ Mom taps a word button → AI generates sentences she might be trying to say →
 aphasia-talk/
   SPEC.md              # Full project specification (start here)
   backend/             # FastAPI backend (orchestrates vLLM + whisper.cpp + SQLite)
+  mobile/              # Flutter tablet app — Android + iOS (the release target)
   frontend/            # Web frontend (functional prototype + interaction reference)
-  mobile_app/          # Flutter tablet app (iOS + Android)
   docker-compose.yml   # DGX Spark deployment (vLLM + whisper.cpp + backend)
 ```
+
+The Flutter app in `mobile/` is the release target for Android and iOS
+(see [mobile/README.md](mobile/README.md) for build + store instructions).
+The web frontend remains a quick way to exercise the backend from any browser.
 
 ## Quick Start — Web (no GPU required)
 
@@ -52,19 +56,16 @@ DGX Spark. Flip `MOCK_INFERENCE=false` on the Spark to use the real models.
 ## Quick Start — Flutter Tablet App
 
 ```bash
-cd mobile_app
+cd mobile
 flutter pub get
 flutter run          # run on connected device / emulator
 ```
 
 The Flutter app connects to the backend over LAN. Set the backend address
-in Settings (gear icon). It defaults to `http://localhost:8080`.
+in Settings (gear icon).
 
-**Build for tablet:**
-```bash
-flutter build apk --release   # Android
-flutter build ios --release    # iOS (requires Xcode)
-```
+**Build for tablet:** see [mobile/README.md](mobile/README.md) for signed
+Android (APK/AAB) and iOS (TestFlight) release steps.
 
 See [backend/README.md](backend/README.md) for the API reference and
 [SPEC.md](SPEC.md) for the complete specification.

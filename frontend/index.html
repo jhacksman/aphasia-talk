@@ -716,11 +716,18 @@ async function loadProfile() {
   } catch (e) { /* backend unreachable; leave fields as-is */ }
 }
 async function saveProfile() {
-  const yearRaw = $("prof-year").value.trim();
+  const yearField = $("prof-year");
+  // type=number inputs report "" for unparseable text (badInput) — catch it
+  // so garbage isn't silently saved as "no year".
+  if (yearField.validity && yearField.validity.badInput) {
+    alert("Please enter a birth year between 1900 and 2030, or leave it blank.");
+    return;
+  }
+  const yearRaw = yearField.value.trim();
   let birthYear = null;
   if (yearRaw !== "") {
-    birthYear = parseInt(yearRaw, 10);
-    if (isNaN(birthYear) || birthYear < 1900 || birthYear > 2030) {
+    birthYear = Number(yearRaw);
+    if (!Number.isInteger(birthYear) || birthYear < 1900 || birthYear > 2030) {
       alert("Please enter a birth year between 1900 and 2030, or leave it blank.");
       return;
     }

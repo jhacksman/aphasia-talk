@@ -122,3 +122,18 @@ def test_profile_partial_update_preserves_idiolect(client):
 
 def test_profile_rejects_out_of_range_year(client):
     assert client.put("/profile", json={"birth_year": 1800}).status_code == 422
+
+
+def test_prompt_cache_reset_on_startup(client):
+    # A composed prompt cached by one lifecycle must not leak into the next
+    # (the DB may have been swapped/reseeded between them).
+    import app.main as main
+
+    client.put("/profile", json={"name": "Margaret", "birth_year": 1948})
+    client.post("/generate", json={"word": "water"})  # populates the cache
+    assert main._prompt_cache is not None
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.app):
+        assert main._prompt_cache is None
