@@ -30,12 +30,14 @@ Mom taps a word button → AI generates sentences she might be trying to say →
 aphasia-talk/
   SPEC.md              # Full project specification (start here)
   backend/             # FastAPI backend (orchestrates vLLM + whisper.cpp + SQLite)
+  mobile/              # Flutter tablet app — Android + iOS (the release target)
   frontend/            # Web frontend (functional prototype + interaction reference)
   docker-compose.yml   # DGX Spark deployment (vLLM + whisper.cpp + backend)
 ```
 
-The web frontend implements the real interaction model end to end and serves as
-the precise visual/behavior reference for the eventual Flutter tablet build.
+The Flutter app in `mobile/` is the release target for Android and iOS
+(see [mobile/README.md](mobile/README.md) for build + store instructions).
+The web frontend remains a quick way to exercise the backend from any browser.
 
 ## Quick Start (no GPU required)
 

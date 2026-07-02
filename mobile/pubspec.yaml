@@ -1,0 +1,28 @@
+name: aphasia_talk
+description: >-
+  Communication aid for a person with Alzheimer's and aphasia. Tap a word,
+  get AI-generated sentences from a local DGX Spark, tap one to speak it.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  flutter_tts: ^4.2.0
+  shared_preferences: ^2.3.3
+  record: ^5.1.2
+  image_picker: ^1.1.2
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
