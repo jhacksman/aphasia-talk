@@ -10,11 +10,14 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import httpx
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import db, llm, whisper
+from . import db, llm, voice, whisper
 from .config import settings
 from .profile import Profile, compose_system_prompt, formative_decade
 from .schemas import (
@@ -184,6 +187,42 @@ def _profile_response(profile: Profile) -> ProfileResponse:
         formative_decade=formative_decade(profile.birth_year) if profile.birth_year else None,
         system_prompt_preview=compose_system_prompt(llm.BASE_SYSTEM_PROMPT, profile),
     )
+
+
+@app.get("/voice")
+async def voice_status() -> dict:
+    """Cloned-voice state for the tablet's Settings sheet."""
+    return voice.get_status()
+
+
+@app.post("/voice/reference")
+async def upload_voice_reference(
+    audio: UploadFile = File(...),
+    transcript: str | None = Form(default=None),
+) -> dict:
+    """Upload her voice recording (mp3/wav). Normalized, auto-transcribed
+    via whisper when no transcript is given, and stored for the TTS clone."""
+    data = await audio.read()
+    try:
+        return await voice.store_reference(data, audio.filename or "", transcript)
+    except voice.VoiceError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
+
+
+@app.post("/tts")
+async def tts(payload: dict) -> Response:
+    """Speak `text` in the cloned voice; returns WAV audio."""
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="No text to speak")
+    try:
+        audio_bytes = await voice.synthesize(text)
+    except voice.VoiceError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
+    except httpx.HTTPError:
+        # Sidecar down/unreachable — tablet falls back to its system voice.
+        raise HTTPException(status_code=503, detail="Voice service unavailable")
+    return Response(content=audio_bytes, media_type="audio/wav")
 
 
 @app.post("/speak-log")

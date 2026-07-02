@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -7,10 +9,18 @@ import 'package:flutter_tts/flutter_tts.dart';
 /// must speak without any network). Speech rate is slightly slower than
 /// default so listeners have time to process.
 class TtsService {
-  TtsService([FlutterTts? tts]) : _tts = tts ?? FlutterTts();
+  TtsService([FlutterTts? tts, AudioPlayer? player])
+      : _tts = tts ?? FlutterTts(),
+        _playerOverride = player;
 
   final FlutterTts _tts;
+  final AudioPlayer? _playerOverride;
+  // Lazy: AudioPlayer touches platform channels at construction, so it is
+  // only created when cloned-voice playback is actually used.
+  AudioPlayer? _lazyPlayer;
   bool _configured = false;
+
+  AudioPlayer get _player => _playerOverride ?? (_lazyPlayer ??= AudioPlayer());
 
   Future<void> _configure() async {
     if (_configured) return;
@@ -39,9 +49,22 @@ class TtsService {
   Future<void> speak(String text) async {
     if (text.trim().isEmpty) return;
     await _configure();
-    await _tts.stop(); // Replace anything mid-utterance; latest tap wins.
+    await stop(); // Replace anything mid-utterance; latest tap wins.
     await _tts.speak(text);
   }
 
-  Future<void> stop() => _tts.stop();
+  /// Play cloned-voice WAV audio from the backend. Same latest-tap-wins
+  /// rule as [speak].
+  Future<void> playWav(Uint8List wavBytes) async {
+    await _configure(); // Audio session must allow playback in silent mode.
+    await stop();
+    await _player.play(BytesSource(wavBytes, mimeType: 'audio/wav'));
+  }
+
+  Future<void> stop() async {
+    await _tts.stop();
+    // Only stop the player if it was ever created — never construct it here.
+    final player = _playerOverride ?? _lazyPlayer;
+    if (player != null) await player.stop();
+  }
 }

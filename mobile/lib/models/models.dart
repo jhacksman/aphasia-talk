@@ -161,6 +161,28 @@ class Profile {
       };
 }
 
+/// Cloned-voice state from GET /voice (drives the Settings voice section).
+class VoiceStatus {
+  const VoiceStatus({
+    required this.clonedAvailable,
+    this.originalFilename,
+    this.transcript,
+    this.durationSeconds,
+  });
+
+  final bool clonedAvailable;
+  final String? originalFilename;
+  final String? transcript;
+  final double? durationSeconds;
+
+  factory VoiceStatus.fromJson(Map<String, dynamic> json) => VoiceStatus(
+        clonedAvailable: (json['cloned_available'] as bool?) ?? false,
+        originalFilename: json['original_filename'] as String?,
+        transcript: json['transcript'] as String?,
+        durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+      );
+}
+
 class TranscribeResult {
   const TranscribeResult({required this.text, required this.confidence});
 

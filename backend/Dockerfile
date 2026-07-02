@@ -5,6 +5,11 @@
 # frontend can be copied in alongside the backend.
 FROM python:3.11-slim
 
+# ffmpeg: normalizes uploaded voice recordings (mp3/odd wavs) to 16kHz WAV
+# for the voice-cloning reference.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY backend/requirements.txt .

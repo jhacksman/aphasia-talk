@@ -116,12 +116,28 @@ class AppState extends ChangeNotifier {
   Future<void> speakSentence(String text) async {
     selectedSentence = text;
     notifyListeners();
-    await tts.speak(text);
+    await _speak(text);
     await api.logSpoken(text, currentWord);
   }
 
   Future<void> speakSelected() async {
-    if (selectedSentence.isNotEmpty) await tts.speak(selectedSentence);
+    if (selectedSentence.isNotEmpty) await _speak(selectedSentence);
+  }
+
+  /// Route to the configured voice. The cloned voice needs the Spark; any
+  /// failure falls back to the on-device voice so she is never left silent.
+  Future<void> _speak(String text) async {
+    if (settings.voiceMode == 'cloned') {
+      try {
+        final wav = await api.ttsAudio(text);
+        await tts.playWav(Uint8List.fromList(wav));
+        _setConnection(ConnectionStatus.online);
+        return;
+      } catch (_) {
+        // Fall through to the system voice — speech must never fail.
+      }
+    }
+    await tts.speak(text);
   }
 
   void clearSelected() {

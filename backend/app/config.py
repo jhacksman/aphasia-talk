@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     vllm_url: str = "http://vllm:8000"
     vllm_model: str = "Qwen/Qwen3.6-35B-A3B-FP8"
     whisper_url: str = "http://whisper:8001"
+    # Voice-cloning TTS sidecar (spark/tts, Qwen3-TTS Base). Empty disables
+    # the cloned-voice option; the tablet falls back to its system voice.
+    tts_url: str = "http://tts:8002"
+
+    # Where the uploaded voice reference (normalized WAV + transcript) lives.
+    # Shared with the TTS sidecar via the ./data volume.
+    voice_dir: str = str(_DATA_DIR / "voice")
 
     # When true, the backend fabricates plausible sentences / transcriptions
     # instead of calling vLLM and whisper.cpp. Lets the API run with no GPU.

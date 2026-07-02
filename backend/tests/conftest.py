@@ -10,6 +10,7 @@ import tempfile
 # Must be set before importing app.config (settings are read at import time).
 _TMP = pathlib.Path(tempfile.mkdtemp(prefix="aphasia-test-"))
 os.environ["DATABASE_PATH"] = str(_TMP / "test.db")
+os.environ["VOICE_DIR"] = str(_TMP / "voice")
 os.environ["MOCK_INFERENCE"] = "true"
 
 import pytest

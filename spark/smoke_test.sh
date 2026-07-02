@@ -105,6 +105,26 @@ TR=$(curl -sS -m 60 -X POST "$BACKEND/transcribe" -F "audio=@/tmp/aphasia_test.w
 echo "$TR" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["text"]; print(f"   OK  transcribed: {t!r}")' \
   || bad "/transcribe failed: ${TR:0:300}"
 
+# --- cloned voice ------------------------------------------------------------
+say "backend /voice (cloned-voice status)"
+VOICE=$(curl -sS -m 10 "$BACKEND/voice" || true)
+echo "$VOICE" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(f"   OK  cloned_available={d[\"cloned_available\"]}")' \
+  || bad "/voice failed: ${VOICE:0:200}"
+
+say "backend /tts (200 with reference, 409 without — 5xx means the sidecar is broken)"
+TTS_CODE=$(curl -sS -m 120 -o /tmp/aphasia_tts_out.wav -w "%{http_code}" \
+    -X POST "$BACKEND/tts" -H 'Content-Type: application/json' \
+    -d '{"text":"Hello, this is a voice test."}' || echo "000")
+if [ "$TTS_CODE" = "200" ]; then
+    head -c 4 /tmp/aphasia_tts_out.wav | grep -q RIFF \
+      && ok "cloned voice speaking (WAV returned)" \
+      || bad "/tts returned 200 but not a WAV"
+elif [ "$TTS_CODE" = "409" ]; then
+    ok "TTS wiring works — no reference uploaded yet (upload from tablet Settings)"
+else
+    bad "/tts returned HTTP $TTS_CODE — check: docker compose logs tts --tail 50"
+fi
+
 # --- bookmarks round trip ----------------------------------------------------
 say "backend bookmark round-trip"
 BM=$(curl -sS -m 10 -X POST "$BACKEND/bookmarks" -H 'Content-Type: application/json' \

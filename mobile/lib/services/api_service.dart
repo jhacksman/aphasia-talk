@@ -154,6 +154,51 @@ class ApiService {
     return Profile.fromJson(body);
   }
 
+  // ── Cloned voice ──
+
+  Future<VoiceStatus> voiceStatus() async {
+    final body = await _guard(() async =>
+        _decode(await _client.get(_uri('/voice')).timeout(_timeout)));
+    return VoiceStatus.fromJson(body);
+  }
+
+  /// Upload her voice recording (wav/mp3). Backend normalizes and
+  /// auto-transcribes it via whisper when no transcript is provided.
+  Future<VoiceStatus> uploadVoiceReference(
+    List<int> audioBytes, {
+    required String filename,
+    String? transcript,
+  }) async {
+    final request = http.MultipartRequest('POST', _uri('/voice/reference'))
+      ..files.add(http.MultipartFile.fromBytes('audio', audioBytes, filename: filename));
+    if (transcript != null && transcript.trim().isNotEmpty) {
+      request.fields['transcript'] = transcript.trim();
+    }
+    final body = await _guard(() async {
+      // Reference processing includes a whisper pass — allow extra time.
+      final streamed = await _client.send(request).timeout(const Duration(seconds: 120));
+      return _decode(await http.Response.fromStream(streamed));
+    });
+    return VoiceStatus.fromJson(body);
+  }
+
+  /// Speak `text` in the cloned voice; returns WAV bytes to play.
+  Future<List<int>> ttsAudio(String text) async {
+    return _guard(() async {
+      final resp = await _client
+          .post(
+            _uri('/tts'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'text': text}),
+          )
+          .timeout(_timeout);
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        throw ApiException('HTTP ${resp.statusCode}', statusCode: resp.statusCode);
+      }
+      return resp.bodyBytes;
+    });
+  }
+
   /// Best-effort usage logging; never surfaces errors to the UI.
   Future<void> logSpoken(String text, String? word) async {
     try {

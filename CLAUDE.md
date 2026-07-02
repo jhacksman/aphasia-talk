@@ -16,8 +16,14 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 ```
 
 - `backend/` — FastAPI. Endpoints: /generate, /vision, /transcribe, /words,
-  /bookmarks, /profile, /speak-log, /health. SQLite for bookmarks/config.
-  `MOCK_INFERENCE=true` fabricates output so everything runs GPU-less.
+  /bookmarks, /profile, /speak-log, /voice, /voice/reference, /tts, /health.
+  SQLite for bookmarks/config. `MOCK_INFERENCE=true` fabricates output so
+  everything runs GPU-less (mock /tts returns a beep).
+- Voice: the tablet offers "Fast" (on-device system TTS, default) and "Her
+  voice" (Qwen3-TTS *Base* clone served by spark/tts on :8002 — Base is the
+  only variant that clones). Caregiver uploads a wav/mp3 from tablet
+  Settings; backend normalizes (ffmpeg) + auto-transcribes it via whisper.
+  Cloned mode always falls back to the system voice — speech never fails.
 - `mobile/` — the release Flutter app (Android + iOS). The single app; a
   duplicate tree (mobile_app/) was removed deliberately — don't resurrect it.
 - `frontend/` — single-file web client; quickest way to exercise the backend.
@@ -63,8 +69,8 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 
 ## Development facts
 
-- Tests: `cd backend && python -m pytest` (22); `cd mobile && flutter test`
-  (26) + `flutter analyze --fatal-infos`. CI runs both + builds the APK
+- Tests: `cd backend && python -m pytest` (28); `cd mobile && flutter test`
+  (30) + `flutter analyze --fatal-infos`. CI runs both + builds the APK
   artifact + iOS simulator compile. Keep all of it green.
 - vLLM flags that must NOT be used on GB10: `--enable-chunked-prefill`
   (9x throughput regression), `--kv-cache-dtype fp8` (repetition loops).
