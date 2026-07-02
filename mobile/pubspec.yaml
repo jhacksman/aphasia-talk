@@ -15,7 +15,7 @@ dependencies:
   http: ^1.2.2
   flutter_tts: ^4.2.0
   shared_preferences: ^2.3.3
-  record: ^5.1.2
+  record: ^7.1.1
   image_picker: ^1.1.2
   path_provider: ^2.1.5
 
