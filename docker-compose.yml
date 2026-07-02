@@ -1,27 +1,44 @@
-# DGX Spark deployment: vLLM (Qwen3.6-35B-A3B) + whisper.cpp + FastAPI backend.
+# DGX Spark deployment: vLLM + whisper.cpp + FastAPI backend.
 # The backend also serves the web frontend at http://<spark-ip>:8080/.
+#
+# Models are CONFIG, not code — set them in .env (copy .env.example). Model
+# quality moves weekly; swapping means editing .env, re-running
+# spark/setup.sh for the new weights, and `docker compose up -d`.
+#
+# Everything restarts automatically: this is a family appliance, and after a
+# power cut the Spark must come back speaking on its own.
 #
 # For development without a GPU, run just the backend with MOCK_INFERENCE=true
 # (see backend/.env.example) — it fabricates sentences so the full UI works.
 
 services:
   vllm:
-    image: vllm/vllm-openai:cu130-nightly
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:cu130-nightly}
     runtime: nvidia
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - /home/user/models:/models
+      - ${MODELS_DIR:-/home/user/models}:/models
+    # Gotchas (SPEC.md): DO NOT add --enable-chunked-prefill (9x regression
+    # on GB10) or --kv-cache-dtype fp8 (repetition loops on GB10).
     command: >
-      vllm serve Qwen/Qwen3.6-35B-A3B-FP8
+      vllm serve ${VLLM_MODEL:-Qwen/Qwen3.6-35B-A3B-FP8}
       --host 0.0.0.0
       --port 8000
       --gpu-memory-utilization 0.85
       --max-model-len 131072
       --enable-prefix-caching
-      --reasoning-parser qwen3
+      --reasoning-parser ${VLLM_REASONING_PARSER:-qwen3}
       --max-num-seqs 4
       --max-num-batched-tokens 4096
+      --download-dir /models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/v1/models || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s   # first model load takes minutes
     deploy:
       resources:
         reservations:
@@ -29,31 +46,39 @@ services:
             - capabilities: [gpu]
 
   whisper:
-    image: whisper-cpp-server:sm121
+    # Built on the Spark: docker build -t whisper-cpp-server:sm121 spark/whisper
+    image: ${WHISPER_IMAGE:-whisper-cpp-server:sm121}
     runtime: nvidia
+    restart: unless-stopped
     ports:
       - "8001:8001"
     volumes:
-      - /home/user/models/whisper:/models
+      - ${MODELS_DIR:-/home/user/models}/whisper:/models
     command: >
-      --model /models/ggml-large-v3-turbo.bin
-      --port 8001
-      --host 0.0.0.0
+      --model /models/${WHISPER_MODEL:-ggml-large-v3-turbo.bin}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      - MOCK_INFERENCE=false
+      - MOCK_INFERENCE=${MOCK_INFERENCE:-false}
       - VLLM_URL=http://vllm:8000
-      - VLLM_MODEL=Qwen/Qwen3.6-35B-A3B-FP8
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen3.6-35B-A3B-FP8}
       - WHISPER_URL=http://whisper:8001
       - DATABASE_PATH=/app/data/aphasia_talk.db
     volumes:
       - ./data:/app/data
     depends_on:
-      - vllm
-      - whisper
+      vllm:
+        condition: service_healthy
+      whisper:
+        condition: service_started
