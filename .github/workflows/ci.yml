@@ -88,26 +88,3 @@ jobs:
         run: |
           flutter pub get
           flutter build ios --simulator --debug
-
-  # Devin's Flutter tree (mobile_app/) merged from PR #3 — kept verified
-  # until the duplicate-app question is settled.
-  mobile-app-alt:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile_app
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test

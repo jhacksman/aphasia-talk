@@ -32,15 +32,12 @@ aphasia-talk/
   backend/             # FastAPI backend (orchestrates vLLM + whisper.cpp + SQLite)
   mobile/              # Flutter tablet app — Android + iOS (the release target)
   frontend/            # Web frontend (functional prototype + interaction reference)
-  mobile_app/          # Flutter tablet app (iOS + Android)
   docker-compose.yml   # DGX Spark deployment (vLLM + whisper.cpp + backend)
 ```
 
 The Flutter app in `mobile/` is the release target for Android and iOS
 (see [mobile/README.md](mobile/README.md) for build + store instructions).
-`mobile_app/` is a second Flutter implementation merged from PR #3 — the
-duplication is pending consolidation. The web frontend remains a quick way
-to exercise the backend from any browser.
+The web frontend remains a quick way to exercise the backend from any browser.
 
 ## Quick Start — Web (no GPU required)
 
