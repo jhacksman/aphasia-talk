@@ -32,6 +32,8 @@ aphasia-talk/
   backend/             # FastAPI backend (orchestrates vLLM + whisper.cpp + SQLite)
   mobile/              # Flutter tablet app — Android + iOS (the release target)
   frontend/            # Web frontend (functional prototype + interaction reference)
+  spark/               # DGX Spark bring-up kit (models, whisper image, smoke tests)
+  CLAUDE.md            # Agent briefing — knowledge transfer for on-Spark sessions
   docker-compose.yml   # DGX Spark deployment (vLLM + whisper.cpp + backend)
 ```
 
