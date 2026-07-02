@@ -28,6 +28,10 @@ RUN cmake -B build \
     && cmake --build build -j"$(nproc)" --target whisper-server
 
 FROM ${CUDA_RUNTIME_IMAGE} AS runtime
+# ggml links OpenMP dynamically even with BUILD_SHARED_LIBS=OFF; the CUDA
+# runtime image doesn't ship libgomp.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/bin/whisper-server /usr/local/bin/whisper-server
 
 EXPOSE 8001

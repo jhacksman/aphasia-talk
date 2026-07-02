@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     # SQLite database location.
     database_path: str = str(_DATA_DIR / "aphasia_talk.db")
 
-    # Generation tuning.
-    request_timeout: float = 30.0
+    # Generation tuning. The timeout must survive vLLM's first-inference
+    # kernel autotune after a cold boot (~60s on GB10); the UI never shows
+    # a timer to the user, so a long ceiling here costs nothing.
+    request_timeout: float = 120.0
     max_sentences: int = 8
 
 

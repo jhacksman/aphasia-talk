@@ -80,6 +80,9 @@ def _coerce_payload(raw: dict) -> tuple[list[str], list[str]]:
         elif isinstance(s, dict) and s.get("text"):
             sentences.append(str(s["text"]).strip())
     related = [str(w).strip() for w in raw.get("related_words", []) if str(w).strip()]
+    # Models sometimes repeat a related word; each should appear once.
+    seen: set[str] = set()
+    related = [w for w in related if not (w.lower() in seen or seen.add(w.lower()))]
     return [s for s in sentences if s], related
 
 
@@ -118,12 +121,16 @@ async def generate_sentences(
         "temperature": 0.7,
         "max_tokens": 600,
         "response_format": {"type": "json_object"},
+        # Qwen3.6 ignores the legacy /no_think soft switch; without this the
+        # model burns max_tokens on reasoning_content and returns content=None.
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     resp = await _get_client().post(
         f"{settings.vllm_url}/v1/chat/completions", json=body
     )
     resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
+    # content is None when the model spent the whole budget thinking.
+    content = resp.json()["choices"][0]["message"]["content"] or ""
 
     try:
         sentences, related = _coerce_payload(_extract_json(content))
@@ -166,10 +173,11 @@ async def generate_from_image(
         "temperature": 0.7,
         "max_tokens": 700,
         "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     resp = await _get_client().post(f"{settings.vllm_url}/v1/chat/completions", json=body)
     resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
+    content = resp.json()["choices"][0]["message"]["content"] or ""
 
     try:
         raw = _extract_json(content)

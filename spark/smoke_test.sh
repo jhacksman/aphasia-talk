@@ -57,7 +57,8 @@ d=json.load(sys.stdin)
 s=[x["text"] for x in d["sentences"]]
 assert len(s)>=4, f"only {len(s)} sentences"
 assert all(len(x.split())<=20 for x in s), "sentences too long for TTS"
-print(f"   OK  {len(s)} sentences, {len(d[\"related_words\"])} related words")
+rw=d["related_words"]
+print(f"   OK  {len(s)} sentences, {len(rw)} related words")
 for x in s[:4]: print(f"        - {x}")' \
   && ok "generation latency: ${ELAPSED}s (target < ~2.5s warm)" \
   || bad "/generate failed or malformed: ${GEN:0:300}"
@@ -87,7 +88,8 @@ echo "$VIS" | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
 assert "identified_object" in d, d
-print(f"   OK  identified: {d[\"identified_object\"]!r}, {len(d[\"sentences\"])} sentences")' \
+obj=d["identified_object"]; sents=d["sentences"]
+print(f"   OK  identified: {obj!r}, {len(sents)} sentences")' \
   || bad "/vision failed: ${VIS:0:300}"
 
 # --- transcription with a real WAV ------------------------------------------
@@ -100,7 +102,7 @@ w.writeframes(struct.pack("<" + "h"*16000, *([0]*16000)))
 w.close()
 EOF
 TR=$(curl -sS -m 60 -X POST "$BACKEND/transcribe" -F "audio=@/tmp/aphasia_test.wav;type=audio/wav" || true)
-echo "$TR" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(f"   OK  transcribed: {d[\"text\"]!r}")' \
+echo "$TR" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["text"]; print(f"   OK  transcribed: {t!r}")' \
   || bad "/transcribe failed: ${TR:0:300}"
 
 # --- bookmarks round trip ----------------------------------------------------

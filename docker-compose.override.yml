@@ -1,0 +1,33 @@
+# Local override for gb10-02: the `nvidia` docker runtime is not registered
+# on this box (registering it needs sudo). GPU access works fine via CDI /
+# --gpus (the deploy.resources device reservations) on plain runc — verified
+# with `docker run --gpus all ... nvidia-smi`. If the nvidia runtime is ever
+# registered (sudo nvidia-ctk runtime configure --runtime=docker && sudo
+# systemctl restart docker), this file can be deleted.
+services:
+  vllm:
+    runtime: runc
+    # aeon-vllm-ultimate's entrypoint is /bin/bash, so we pin the real
+    # entrypoint and pass only flags in command (also avoids the doubled
+    # "vllm serve" the upstream cu130-nightly entrypoint caused). Same flags
+    # as docker-compose.yml, minus the prefix. Same GB10 gotchas apply: no
+    # fp8 KV cache.
+    entrypoint: ["vllm", "serve"]
+    volumes:
+      - ${MODELS_DIR:-/home/user/models}:/models
+      # Persist compiled CUDA graphs: cuts vLLM boot from ~10-12 min to
+      # ~3-5 min after the first start (AEON image docs).
+      - ./data/vllm-cache:/root/.cache/vllm
+    command: >
+      ${VLLM_MODEL:-Qwen/Qwen3.6-35B-A3B-FP8}
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization 0.85
+      --max-model-len 131072
+      --enable-prefix-caching
+      --reasoning-parser ${VLLM_REASONING_PARSER:-qwen3}
+      --max-num-seqs 4
+      --max-num-batched-tokens 4096
+      --download-dir /models
+  whisper:
+    runtime: runc
