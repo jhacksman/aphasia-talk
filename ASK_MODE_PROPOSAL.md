@@ -136,35 +136,48 @@ Garbage rejection in `/ask` (server-side, cheap):
 - Tapping the strip calls `/respond` and fills the existing sentence list;
   bookmarking/speaking work unchanged.
 
-## Alternative considered: wake word ("Hey Talk, are you hungry?")
+## Deferred, not rejected: her name as the wake word (phase 3)
 
-Fairer than full ambient listening — nothing is transcribed until the
-keyword fires — and it buys hands-free capture for a caregiver across the
-room. Rejected for v1 anyway:
+A generic wake word ("Hey Talk, …") was rejected: artificial phrase nobody
+remembers mid-conversation, TV-triggered false accepts that change her
+screen unpredictably, and the endpointing problem all over again.
 
-- **False accepts hurt *her*.** All wake-word engines misfire, and TV audio
-  is the classic trigger. A misfire spontaneously changes the question strip
-  on her screen to garbage she didn't cause — disorienting for someone with
-  Alzheimer's, on a device whose contract is "calm, nothing surprises you."
-  It also pollutes the conversation log.
-- **Endpointing reintroduces the noise problem.** Push-to-talk gets exact
-  boundaries from human intent; after a wake word the system must detect
-  the question's end via trailing-silence VAD, which a TV keeps defeating.
-- **False rejects are worse than a button.** A button works the first time,
-  every time; a missed wake word means repeating yourself artificially.
-- **Engineering posture**: on-device wake word in Flutter = Porcupine-class
-  dependency + continuous mic permission + battery drain; running detection
-  on the Spark instead would mean streaming tablet audio continuously —
-  an always-on mic on the network, which is what we ruled out.
+Jack's refinement — **her own name as the wake word** ("Hey Margaret, are
+you hungry?") — is much stronger and is the designated shape for hands-free
+capture if field use demands it:
 
-The hands-free need is mostly covered deterministically by the caregiver's
-phone as a second client (build-order step 4). If field use still demands
-voice initiation, add wake word later as **opt-in**, thresholded paranoidly
-toward false-*reject* (misfires are the harm; repeats are tolerable).
+- It is how family already addresses her; nothing artificial to remember.
+- Her name in the audio is content-based diarization on the cheap: a real
+  signal the speech is directed *at* her rather than at/from the TV.
+
+Remaining problems, and the mitigation that makes them acceptable:
+
+- **Speech *about* her fires it** ("Margaret seemed tired today") — third-
+  person conversation must never surface on her screen as a tappable card.
+- Her name said **on TV**; **follow-up questions without the name** never
+  trigger (partial capture); diminutives (Mom, Grandma, …) each need their
+  own wake model; short names make weak keywords.
+- Always-on mic posture on the tablet (battery, permission), and VAD
+  endpointing in a noisy room.
+
+**The LLM gate**: wake fires → record with VAD endpoint → transcribe →
+one cheap local-LLM classification — *"is this a question or request
+addressed directly to her, in the second person?"* — and everything that
+fails is **silently discarded** (never shown, never logged). That flips the
+harm model: false accepts become invisible discards; only high-confidence
+real questions touch her screen. Speech-about-her and most TV dialogue die
+at the gate.
+
+Still phase 3, not v1: the core loop (log, /respond, reply tuning, strip)
+is identical work either way and ships without wake-model training,
+endpointing, and gate-threshold tuning — all of which need field iteration
+on a pipeline that already works. Push-to-talk first; bolt the hands-free
+trigger onto a proven path. The caregiver-phone client (step 4) covers the
+across-the-room case in the meantime.
 
 ## What this deliberately does NOT do
 
-- No always-on microphone, no wake word in v1 (see above).
+- No always-on microphone in v1; "hey $name" wake capture is phase 3 (above).
 - No speaker diarization/enrollment — unnecessary once capture is intentional.
 - No auto-generation on transcription — the question waits until *she* taps.
 - No auto-selected or pre-highlighted reply — all candidates are equal;
@@ -190,7 +203,8 @@ toward false-*reject* (misfires are the harm; repeats are tolerable).
 3. **Flutter app**: same UI, reusing the existing recorder plumbing.
 4. **Later, only if field use demands**: trailing-silence auto-stop for the
    caregiver's recording, whisper VAD flag, a caregiver-phone companion
-   page (the web client on their phone already covers most of this).
+   page (the web client on their phone already covers most of this), and
+   the "hey $name" wake capture with the LLM gate (section above).
 
 ## Open questions for Jack
 
