@@ -136,9 +136,35 @@ Garbage rejection in `/ask` (server-side, cheap):
 - Tapping the strip calls `/respond` and fills the existing sentence list;
   bookmarking/speaking work unchanged.
 
+## Alternative considered: wake word ("Hey Talk, are you hungry?")
+
+Fairer than full ambient listening — nothing is transcribed until the
+keyword fires — and it buys hands-free capture for a caregiver across the
+room. Rejected for v1 anyway:
+
+- **False accepts hurt *her*.** All wake-word engines misfire, and TV audio
+  is the classic trigger. A misfire spontaneously changes the question strip
+  on her screen to garbage she didn't cause — disorienting for someone with
+  Alzheimer's, on a device whose contract is "calm, nothing surprises you."
+  It also pollutes the conversation log.
+- **Endpointing reintroduces the noise problem.** Push-to-talk gets exact
+  boundaries from human intent; after a wake word the system must detect
+  the question's end via trailing-silence VAD, which a TV keeps defeating.
+- **False rejects are worse than a button.** A button works the first time,
+  every time; a missed wake word means repeating yourself artificially.
+- **Engineering posture**: on-device wake word in Flutter = Porcupine-class
+  dependency + continuous mic permission + battery drain; running detection
+  on the Spark instead would mean streaming tablet audio continuously —
+  an always-on mic on the network, which is what we ruled out.
+
+The hands-free need is mostly covered deterministically by the caregiver's
+phone as a second client (build-order step 4). If field use still demands
+voice initiation, add wake word later as **opt-in**, thresholded paranoidly
+toward false-*reject* (misfires are the harm; repeats are tolerable).
+
 ## What this deliberately does NOT do
 
-- No always-on microphone, no wake word (always-on in disguise).
+- No always-on microphone, no wake word in v1 (see above).
 - No speaker diarization/enrollment — unnecessary once capture is intentional.
 - No auto-generation on transcription — the question waits until *she* taps.
 - No auto-selected or pre-highlighted reply — all candidates are equal;
