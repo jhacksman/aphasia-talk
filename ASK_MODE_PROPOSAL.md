@@ -15,10 +15,19 @@ Goal: capture what was said to her, show it as text she can tap, and
 generate candidate **replies** that fit the question — while keeping a short
 conversation log so all generation is contextually appropriate.
 
-## The core design decision: push-to-listen, not always-on
+## The core design decision: intentional capture, not ambient transcription
 
-The obvious version — an always-on microphone transcribing the room — is
-rejected. Three reasons, each sufficient alone:
+Two capture triggers, one pipeline:
+
+1. **v1: push-to-talk** — the caregiver taps an [Ask] button, asks, taps
+   again. Deterministic; ships the whole loop with parts that already exist.
+2. **Phase 2: wake word "hey $name"** — hands-free; her own name is the
+   trigger, spotted by a tiny on-device model (see the wake-word section).
+   Not always-on listening: audio passes through the spotter in RAM and is
+   discarded; nothing is recorded or transcribed until the name fires.
+
+What stays rejected is **ambient transcription** — a microphone
+transcribing the room continuously. Three reasons, each sufficient alone:
 
 1. **The TV problem is unsolvable in that mode.** TV/radio dialogue *is*
    speech; no voice-activity detector can filter it. Distinguishing "family
@@ -35,9 +44,9 @@ rejected. Three reasons, each sufficient alone:
    pipeline is a research project; a bounded one is a weekend of work on
    parts that already exist and are smoke-tested.
 
-Instead: **the caregiver deliberately captures the question.** They tap an
-"Ask" button, speak, tap again (exactly the interaction her Dictate button
-already has). The audio window is a few seconds long and intentional:
+Both triggers produce the same thing: a bounded, intentional audio window
+a few seconds long. For the v1 button (exactly the interaction her Dictate
+button already has):
 
 - TV in the background of a 5-second near-field clip is something
   whisper large-v3-turbo handles well — it strongly favors the loud,
@@ -136,48 +145,68 @@ Garbage rejection in `/ask` (server-side, cheap):
 - Tapping the strip calls `/respond` and fills the existing sentence list;
   bookmarking/speaking work unchanged.
 
-## Deferred, not rejected: her name as the wake word (phase 3)
+## Wake-word capture: "hey $name" (committed, phase 2)
 
-A generic wake word ("Hey Talk, …") was rejected: artificial phrase nobody
-remembers mid-conversation, TV-triggered false accepts that change her
-screen unpredictably, and the endpointing problem all over again.
+The primary hands-free trigger: **her own name as the wake word** — "Hey
+Margaret, are you hungry?" It is how family already addresses her, so
+nothing artificial to remember, and her name in the audio is content-based
+diarization on the cheap: a real signal the speech is directed *at* her
+rather than at/from the TV.
 
-Jack's refinement — **her own name as the wake word** ("Hey Margaret, are
-you hungry?") — is much stronger and is the designated shape for hands-free
-capture if field use demands it:
+**This is not always-on listening.** A wake-word spotter is a tiny keyword
+model running on the tablet; mic samples pass through it in RAM and are
+discarded milliseconds later. Nothing is recorded, transcribed, stored, or
+sent over the network until the keyword fires. The privacy posture is
+categorically different from ambient transcription (which stays rejected).
 
-- It is how family already addresses her; nothing artificial to remember.
-- Her name in the audio is content-based diarization on the cheap: a real
-  signal the speech is directed *at* her rather than at/from the TV.
+Pipeline when it fires:
 
-Remaining problems, and the mitigation that makes them acceptable:
+```
+on-device spotter hears "hey $name"
+  → capture starts from a ~2s pre-roll ring buffer (so the question
+    isn't clipped if the name and question run together)
+  → record until trailing silence (VAD endpoint)
+  → POST /ask (same path as the button)
+  → LLM gate: "is this a question or request addressed directly to her,
+    in the second person?" — everything that fails is SILENTLY discarded:
+    never shown, never logged
+  → pass → question strip updates
+```
 
-- **Speech *about* her fires it** ("Margaret seemed tired today") — third-
-  person conversation must never surface on her screen as a tappable card.
-- Her name said **on TV**; **follow-up questions without the name** never
-  trigger (partial capture); diminutives (Mom, Grandma, …) each need their
-  own wake model; short names make weak keywords.
-- Always-on mic posture on the tablet (battery, permission), and VAD
-  endpointing in a noisy room.
+**The LLM gate is what makes wake capture safe.** Failure modes and how
+they land:
 
-**The LLM gate**: wake fires → record with VAD endpoint → transcribe →
-one cheap local-LLM classification — *"is this a question or request
-addressed directly to her, in the second person?"* — and everything that
-fails is **silently discarded** (never shown, never logged). That flips the
-harm model: false accepts become invisible discards; only high-confidence
-real questions touch her screen. Speech-about-her and most TV dialogue die
-at the gate.
+- Speech *about* her ("Margaret seemed tired today") → fires the spotter,
+  dies at the gate (third person). Never touches her screen or the log.
+- Her name on TV → mostly dies at the gate; residual true-question-shaped
+  TV lines are rare and the caregiver-visible transcript catches them.
+- Spotter misfires on similar-sounding audio → gate discards; cost is
+  invisible.
+- False *rejects* (missed name, follow-up questions asked without the
+  name) → the Ask button is the fallback; deterministic capture always
+  works. Threshold the spotter toward false-reject: misfires are the harm,
+  repeats are tolerable.
 
-Still phase 3, not v1: the core loop (log, /respond, reply tuning, strip)
-is identical work either way and ships without wake-model training,
-endpointing, and gate-threshold tuning — all of which need field iteration
-on a pipeline that already works. Push-to-talk first; bolt the hands-free
-trigger onto a proven path. The caregiver-phone client (step 4) covers the
-across-the-room case in the meantime.
+Implementation notes:
+
+- Spotter on-device in Flutter: Porcupine custom keyword ("hey <name>") or
+  a tflite micro-wake-word model. On-device is a hard requirement — running
+  detection on the Spark would mean streaming tablet audio continuously,
+  which is the ambient posture we rejected.
+- Train variants for what family actually calls her (Mom, Grandma, …) —
+  listen for the real vocabulary before training. Short names make weaker
+  keywords; test false-accept rates against recorded TV audio.
+- The tablet lives docked/plugged as her communication device, so the
+  continuous-spotter battery cost is largely moot; still expose a settings
+  toggle (wake capture on/off) for unplugged use.
+- Phase 2, after the core loop: the spotter bolts onto a proven
+  /ask → gate → strip pipeline, and gate/threshold tuning needs that
+  pipeline live to iterate against.
 
 ## What this deliberately does NOT do
 
-- No always-on microphone in v1; "hey $name" wake capture is phase 3 (above).
+- No ambient transcription, ever. Wake capture ("hey $name", phase 2) spots
+  a keyword on-device and discards everything else unheard.
 - No speaker diarization/enrollment — unnecessary once capture is intentional.
 - No auto-generation on transcription — the question waits until *she* taps.
 - No auto-selected or pre-highlighted reply — all candidates are equal;
@@ -201,10 +230,12 @@ across-the-room case in the meantime.
 2. **Web frontend**: Ask button + strip (the tuning surface — judge reply
    quality across question types here: yes/no, open, choice, emotional).
 3. **Flutter app**: same UI, reusing the existing recorder plumbing.
-4. **Later, only if field use demands**: trailing-silence auto-stop for the
-   caregiver's recording, whisper VAD flag, a caregiver-phone companion
-   page (the web client on their phone already covers most of this), and
-   the "hey $name" wake capture with the LLM gate (section above).
+4. **Wake capture (phase 2)**: on-device "hey $name" spotter + pre-roll
+   buffer + VAD endpoint + the LLM gate (section above). Requires the core
+   loop live to tune gate and thresholds against.
+5. **Later, only if field use demands**: trailing-silence auto-stop for the
+   button flow, whisper VAD flag, a caregiver-phone companion page (the web
+   client on their phone already covers most of this).
 
 ## Open questions for Jack
 
@@ -214,3 +245,5 @@ across-the-room case in the meantime.
 3. Should a fresh question *replace* the strip content silently, or should
    the strip show the last 2-3 questions scrollable? (Proposed: just the
    latest — one clear thing to tap.)
+4. Her name + what family actually calls her (Mom? Grandma? a nickname?) —
+   needed to train the wake-word variants, and for the profile anyway.
