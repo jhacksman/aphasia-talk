@@ -138,17 +138,19 @@ class Bookmark {
 }
 
 class Profile {
-  const Profile({this.name, this.birthYear, this.region, this.idiolectNotes});
+  const Profile({this.name, this.birthYear, this.region, this.pronouns, this.idiolectNotes});
 
   final String? name;
   final int? birthYear;
   final String? region;
+  final String? pronouns;
   final String? idiolectNotes;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
         name: json['name'] as String?,
         birthYear: (json['birth_year'] as num?)?.toInt(),
         region: json['region'] as String?,
+        pronouns: json['pronouns'] as String?,
         idiolectNotes: json['idiolect_notes'] as String?,
       );
 
@@ -158,6 +160,7 @@ class Profile {
         'name': name,
         'birth_year': birthYear,
         'region': region,
+        'pronouns': pronouns,
       };
 }
 

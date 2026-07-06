@@ -193,8 +193,8 @@ def set_setting(key: str, value: str) -> None:
 
 # ── Conversation log (Ask mode) ──────────────────────────────────────────────
 #
-# 'heard' = a transcribed question/remark addressed to her; 'spoken' = a
-# sentence she spoke via TTS. Prompts only ever see a short recency window;
+# 'heard' = a transcribed question/remark addressed to the user; 'spoken' =
+# a sentence they spoke via TTS. Prompts only ever see a short recency window;
 # rows past the retention period are pruned at startup.
 
 def add_conversation_turn(role: str, text: str) -> dict:

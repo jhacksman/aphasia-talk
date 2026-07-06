@@ -113,7 +113,7 @@ class ApiService {
     return TranscribeResult.fromJson(body);
   }
 
-  /// Ask mode: a caregiver's spoken question to her — transcribed and logged
+  /// Ask mode: a caregiver's spoken question to the user — transcribed and logged
   /// as a conversation turn on the backend.
   Future<AskResult> ask(List<int> audioBytes, {String format = 'wav'}) async {
     final request = http.MultipartRequest('POST', _uri('/ask?format=$format'))
@@ -125,7 +125,7 @@ class ApiService {
     return AskResult.fromJson(body);
   }
 
-  /// Candidate replies to a question someone asked her.
+  /// Candidate replies to a question someone asked the user.
   Future<GenerateResult> respond(String question) async {
     final body = await _guard(() async => _decode(await _client
         .post(
@@ -137,7 +137,7 @@ class ApiService {
     return GenerateResult.fromJson(body);
   }
 
-  /// Newest question someone asked her, if any (restores the question strip
+  /// Newest question someone asked the user, if any (restores the question strip
   /// after an app restart).
   Future<String?> latestHeardQuestion() async {
     final body = await _guard(() async =>

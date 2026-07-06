@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted) return;
     if (bytes == null || bytes.isEmpty) {
-      // Never leave her at a silent dead-end: say what to do next.
+      // Never leave the user at a silent dead-end: say what to do next.
       _notice('I couldn\'t hear that. Please try again.');
       return;
     }
@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
         maxWidth: 1280,
         imageQuality: 85,
       );
-      if (image == null) return; // She backed out of the camera — fine.
+      if (image == null) return; // They backed out of the camera — fine.
       final bytes = await image.readAsBytes();
       await state.submitPhoto(bytes);
     } catch (_) {

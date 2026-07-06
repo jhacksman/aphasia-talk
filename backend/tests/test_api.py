@@ -112,6 +112,15 @@ def test_profile_name_only_still_has_persona(client):
     assert "Margaret" in r["system_prompt_preview"]
 
 
+def test_profile_pronouns_flow_into_prompt_and_default_neutral(client):
+    r = client.put("/profile", json={"name": "Sam", "pronouns": "he/him"}).json()
+    assert "pronouns are he/him" in r["system_prompt_preview"]
+    # Without pronouns set, prompts stay neutral — no gendered wording.
+    r2 = client.put("/profile", json={"name": "Sam", "pronouns": None}).json()
+    preview = r2["system_prompt_preview"].lower()
+    assert " she " not in preview and " her " not in preview and " he " not in preview
+
+
 def test_profile_partial_update_preserves_idiolect(client):
     client.put("/profile", json={"idiolect_notes": "keeps it brief"})
     client.put("/profile", json={"name": "Margaret", "birth_year": 1948})
@@ -137,6 +146,17 @@ def test_ask_transcribes_and_logs_heard_turn(client):
 def test_ask_accepts_typed_question(client):
     body = client.post("/ask", data={"text": "Do you want tea?"}).json()
     assert body["text"] == "Do you want tea?" and body["turn_id"] > 0
+
+
+def test_ask_gate_discards_undirected_speech(client):
+    """Wake-word path: speech that isn't a question directed at the user is
+    silently dropped — never shown, never logged. (Mock gate: '?' heuristic.)"""
+    body = client.post("/ask?gate=true", data={"text": "She seemed tired today."}).json()
+    assert body["text"] == "" and body["turn_id"] is None
+    assert client.get("/conversation").json()["turns"] == []
+
+    body = client.post("/ask?gate=true", data={"text": "Are you hungry?"}).json()
+    assert body["text"] == "Are you hungry?" and body["turn_id"] > 0
 
 
 def test_ask_rejects_empty_upload(client):

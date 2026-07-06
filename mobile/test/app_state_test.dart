@@ -284,7 +284,7 @@ void main() {
 
     final state = await buildState(client);
     final dictation = state.submitDictation([1, 2, 3]);
-    await state.selectWord('help'); // She gave up waiting and tapped a word.
+    await state.selectWord('help'); // The user gave up waiting and tapped a word.
     final dictated = await dictation;
 
     expect(dictated, isNull, reason: 'superseded dictation is discarded');

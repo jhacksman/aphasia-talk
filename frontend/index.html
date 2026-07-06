@@ -335,7 +335,7 @@
 
 <!-- Question strip: space is always reserved so the layout never shifts -->
 <div class="question-strip" id="question-strip">
-  <span class="question-placeholder" id="question-placeholder">When someone asks her a question, it will appear here.</span>
+  <span class="question-placeholder" id="question-placeholder">When someone asks a question, it will appear here.</span>
   <button class="question-card" id="question-card" style="display:none" onclick="respondToQuestion()" aria-label="Show ways to reply to this question">
     <i class="ti ti-message-question"></i><span id="question-text"></span>
     <span class="question-hint">tap to reply</span>
@@ -379,7 +379,7 @@
   <button class="action-btn keyboard" onclick="toggleKeyboard()" aria-label="Type a word or phrase">
     <i class="ti ti-keyboard"></i><span>Keyboard</span>
   </button>
-  <button class="action-btn ask" id="ask-btn" onclick="toggleAsk()" aria-label="Ask — for the person talking with her: tap, ask your question aloud, tap again">
+  <button class="action-btn ask" id="ask-btn" onclick="toggleAsk()" aria-label="Ask — for the conversation partner: tap, ask your question aloud, tap again">
     <i class="ti ti-message-question"></i><span>Ask</span>
   </button>
 </div>
@@ -397,9 +397,9 @@
 </div>
 
 <!-- Ask overlay: typed-question fallback when no microphone is available -->
-<div class="overlay" id="ask-overlay" role="dialog" aria-label="Type the question you asked her">
+<div class="overlay" id="ask-overlay" role="dialog" aria-label="Type the question you asked">
   <div class="ov-row">
-    <input class="ov-input" id="ask-input" type="text" placeholder="Type the question you asked her…"
+    <input class="ov-input" id="ask-input" type="text" placeholder="Type the question you asked…"
       onkeydown="if(event.key==='Enter') submitTypedAsk()" autocomplete="off"/>
     <button class="ov-btn" onclick="submitTypedAsk()">Go</button>
     <button class="ov-btn secondary" onclick="toggleAskOverlay()">Done</button>
@@ -414,10 +414,16 @@
     <button class="ov-btn" onclick="saveBackend()">Save</button>
   </div>
 
-  <div class="ov-row" style="margin-top:14px"><label class="ov-label">Her voice — helps the AI phrase things the way she would</label></div>
+  <div class="ov-row" style="margin-top:14px"><label class="ov-label">Their voice — helps the AI phrase things the way they would</label></div>
   <div class="ov-row">
     <input class="ov-input" id="prof-name" type="text" placeholder="Name (optional)" autocomplete="off" style="flex:2"/>
     <input class="ov-input" id="prof-year" type="number" min="1900" max="2030" placeholder="Birth year" autocomplete="off" style="flex:1"/>
+    <select class="ov-input" id="prof-pronouns" style="flex:1">
+      <option value="">Pronouns (optional)</option>
+      <option value="she/her">she/her</option>
+      <option value="he/him">he/him</option>
+      <option value="they/them">they/them</option>
+    </select>
   </div>
   <div class="ov-row">
     <select class="ov-input" id="prof-region">
@@ -455,7 +461,7 @@ let micActive = false;
 let kbOpen = false, settingsOpen = false;
 let askActive = false, askOverlayOpen = false;
 let currentQuestion = null;
-const QUESTION_PLACEHOLDER = "When someone asks her a question, it will appear here.";
+const QUESTION_PLACEHOLDER = "When someone asks a question, it will appear here.";
 
 const $ = (id) => document.getElementById(id);
 
@@ -711,7 +717,7 @@ function toggleMic() {
   sr.start(); window._sr = sr;
 }
 
-// ── Ask mode: capture a question asked TO her, offer candidate replies ────────
+// ── Ask mode: capture a question asked TO the user, offer candidate replies ──
 function setQuestion(text) {
   currentQuestion = text || null;
   $("question-card").style.display = currentQuestion ? "" : "none";
@@ -940,6 +946,7 @@ async function loadProfile() {
     $("prof-name").value = p.name || "";
     $("prof-year").value = p.birth_year || "";
     $("prof-region").value = p.region || "";
+    $("prof-pronouns").value = p.pronouns || "";
   } catch (e) { /* backend unreachable; leave fields as-is */ }
 }
 async function saveProfile() {
@@ -963,6 +970,7 @@ async function saveProfile() {
     name: $("prof-name").value.trim() || null,
     birth_year: birthYear,
     region: $("prof-region").value || null,
+    pronouns: $("prof-pronouns").value || null,
   };
   try {
     await api("/profile", {

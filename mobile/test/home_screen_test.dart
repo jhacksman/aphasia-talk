@@ -54,7 +54,7 @@ void main() {
     await tester.tap(find.byTooltip('Dismiss question'));
     await tester.pumpAndSettle();
     expect(find.text('Are you hungry?'), findsNothing);
-    expect(find.text('When someone asks her a question, it will appear here.'),
+    expect(find.text('When someone asks a question, it will appear here.'),
         findsOneWidget);
   });
 

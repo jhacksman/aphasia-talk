@@ -8,7 +8,7 @@ import '../utils/icon_map.dart';
 /// Left pane: category tabs + the motor-stable word grid + related-word chips.
 ///
 /// Words render strictly in their stored [row, col] order and the grid never
-/// reflows based on usage — position stability is what lets her build muscle
+/// reflows based on usage — position stability is what lets the user build muscle
 /// memory (SPEC.md: buttons never move).
 class WordsPane extends StatelessWidget {
   const WordsPane({super.key, required this.state});

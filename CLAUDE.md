@@ -1,10 +1,13 @@
 # Aphasia Talk — Agent Briefing
 
-You are working on a communication aid for one person: the owner's mother,
-who has Alzheimer's with aphasia. She understands language fully but cannot
-produce it. She taps a word → the local AI generates candidate sentences →
-she taps one → the tablet speaks it. This is not a demo or a startup — it is
-one family's daily tool. Reliability and calm beat features.
+You are working on a communication aid for people with aphasia — users who
+understand language fully but cannot produce it. The user taps a word → the
+local AI generates candidate sentences → they tap one → the tablet speaks
+it. The first deployment is the owner's mother (Alzheimer's with aphasia),
+but the product is person-agnostic: prompts and UI copy stay neutral, and
+anything personal (name, pronouns, era, region) comes from the profile,
+never from code. This is not a demo or a startup — it is a family's daily
+tool. Reliability and calm beat features.
 
 ## Architecture (all local, no cloud)
 
@@ -37,11 +40,12 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 3. **No cloud, no auth, LAN-only.** The backend has no authentication BY
    DESIGN — so it must never be exposed to the internet. Remote access =
    Tailscale. Never add port-forwarding, tunnels, or public hosting.
-4. **Never condescending output.** She is an adult with full comprehension.
-   The persona layer (backend/app/profile.py) biases register only — no
-   dialect costume, no childish phrasing. When tuning, realistic > flavorful.
+4. **Never condescending output.** The user is an adult with full
+   comprehension. The persona layer (backend/app/profile.py) biases register
+   only — no dialect costume, no childish phrasing. When tuning,
+   realistic > flavorful.
 5. **No time pressure in the UI.** Nothing auto-dismisses, nothing times out
-   on her. Errors are calm and tell her what to do next.
+   on the user. Errors are calm and say what to do next.
 6. **Models are config, not code.** Model names live in .env /
    environment (VLLM_MODEL etc.). Swapping models must never require code
    changes; if it does, that's a bug to fix at the config layer.
@@ -52,15 +56,16 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 2. `spark/smoke_test.sh` must pass fully before the tablet points here.
 3. Then tune quality against REAL output (this is the important part):
    - Tap words in the web client (http://localhost:8080). Judge sentences
-     as *her* candidate utterances: short, first-person, varied
+     as the *user's* candidate utterances: short, first-person, varied
      practical/emotional, speakable aloud.
    - The product's voice lives in `backend/app/llm.py` (BASE_SYSTEM_PROMPT,
      temperature, max_tokens) and `backend/app/profile.py` (era/region
      register). Tune there; keep changes byte-stable per invariant 2.
    - Latency budget: tap → sentences ≲ 2s warm. If slower, check prefix
      cache hits in vLLM logs before touching anything else.
-4. Set her real profile (PUT /profile or web Settings): name, birth year,
-   region. Verify the register shifts subtly, not into caricature.
+4. Set the user's real profile (PUT /profile or web Settings): name, birth
+   year, region, pronouns. Verify the register shifts subtly, not into
+   caricature.
 
 ## Development facts
 
@@ -81,6 +86,6 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 - Usage-weighted generation (usage_log exists; feed top phrases back in
   without breaking prompt byte-stability — e.g. recompute at profile-update
   granularity, never per-request)
-- Phase 2, gated on explicit family authorization: idiolect mining from her
-  email, run locally, producing a short style summary (Profile.idiolect_notes
-  already flows into the prompt).
+- Phase 2, gated on explicit family authorization: idiolect mining from the
+  user's email, run locally, producing a short style summary
+  (Profile.idiolect_notes already flows into the prompt).

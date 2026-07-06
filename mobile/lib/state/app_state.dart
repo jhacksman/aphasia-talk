@@ -37,12 +37,12 @@ class AppState extends ChangeNotifier {
   List<Bookmark> bookmarks = const [];
   String selectedSentence = '';
 
-  /// The latest question someone asked her (Ask mode). Shown in the
+  /// The latest question someone asked the user (Ask mode). Shown in the
   /// question strip until replaced or dismissed — never auto-dismissed.
   String? currentQuestion;
 
   /// Monotonic token so a stale generation response never overwrites a newer
-  /// tap (she may tap a second word before the first request returns).
+  /// tap (the user may tap a second word before the first request returns).
   int _requestSeq = 0;
 
   WordCategory? get activeCategory {
@@ -237,7 +237,7 @@ class AppState extends ChangeNotifier {
 
   /// Dictation flow: transcribe recorded audio, then run the word flow.
   Future<String?> submitDictation(List<int> audioBytes, {String format = 'wav'}) async {
-    // Participate in the same ordering as word taps: if she taps a grid word
+    // Participate in the same ordering as word taps: if the user taps a grid word
     // while transcription is in flight, the dictation result is stale and
     // must not clobber the newer selection.
     final seq = _requestSeq;
@@ -247,7 +247,7 @@ class AppState extends ChangeNotifier {
       if (seq != _requestSeq) return null; // Superseded by a newer tap.
       final text = result.text.trim();
       if (text.isEmpty) return null;
-      // Use the first word she said as the generation seed.
+      // Use the first word they said as the generation seed.
       final word = text.split(RegExp(r'\s+')).first;
       await selectWord(word);
       return text;
@@ -257,7 +257,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Ask flow: a caregiver recorded a question addressed to her. Returns the
+  /// Ask flow: a caregiver recorded a question addressed to the user. Returns the
   /// transcribed question, or null if nothing usable was heard.
   Future<String?> submitAsk(List<int> audioBytes, {String format = 'wav'}) async {
     try {
@@ -281,7 +281,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Reply flow: she tapped the question card; fill the sentences pane with
+  /// Reply flow: the user tapped the question card; fill the sentences pane with
   /// candidate replies. Replies aren't word-keyed; they group under "reply"
   /// for bookmarking and usage logging.
   Future<void> respondToQuestion() async {

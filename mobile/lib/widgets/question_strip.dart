@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 
-/// The Ask-mode question strip: shows the latest question someone asked her,
+/// The Ask-mode question strip: shows the latest question someone asked the user,
 /// tappable to get candidate replies.
 ///
 /// The strip's space is ALWAYS reserved (empty state is a quiet placeholder)
@@ -27,7 +27,7 @@ class QuestionStrip extends StatelessWidget {
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                'When someone asks her a question, it will appear here.',
+                'When someone asks a question, it will appear here.',
                 style: TextStyle(
                   fontSize: 13,
                   fontStyle: FontStyle.italic,

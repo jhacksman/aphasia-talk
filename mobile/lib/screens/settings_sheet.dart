@@ -4,8 +4,8 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../state/app_state.dart';
 
-/// Caregiver settings: backend address + the "Her voice" linguistic profile
-/// (name, birth year, region) that steers generation on the backend.
+/// Caregiver settings: backend address + the "Their voice" linguistic profile
+/// (name, birth year, region, pronouns) that steers generation on the backend.
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({super.key, required this.state});
 
@@ -20,6 +20,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   final _nameController = TextEditingController();
   final _yearController = TextEditingController();
   String? _region;
+  String? _pronouns;
   String? _status;
   bool _busy = false;
 
@@ -40,6 +41,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
     'us-west': 'US — West',
     'uk': 'United Kingdom',
   };
+
+  static const _pronounOptions = <String>['she/her', 'he/him', 'they/them'];
 
   @override
   void initState() {
@@ -69,6 +72,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
           _customRegion = region;
         }
         _region = region;
+        _pronouns = profile.pronouns;
       });
     } on ApiException {
       // Backend unreachable; the voice profile stays un-editable this visit
@@ -115,6 +119,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
           name: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
           birthYear: year,
           region: _region,
+          pronouns: _pronouns,
         ));
         profileSaved = true;
       } on ApiException {
@@ -163,9 +168,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            Text('Her voice', style: theme.textTheme.labelLarge),
+            Text('Their voice', style: theme.textTheme.labelLarge),
             Text(
-              'Helps the AI phrase things the way she would.',
+              'Helps the AI phrase things the way they would.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -215,6 +220,25 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   DropdownMenuItem(value: _customRegion, child: Text(_customRegion!)),
               ],
               onChanged: (value) => setState(() => _region = value),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              key: ValueKey('pronouns-$_pronouns'),
+              initialValue: _pronouns,
+              decoration: const InputDecoration(
+                labelText: 'Pronouns (optional)',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String>(value: null, child: Text('—')),
+                for (final p in _pronounOptions)
+                  DropdownMenuItem(value: p, child: Text(p)),
+                // Free-text pronouns set via the API round-trip instead of
+                // being silently erased by a mobile save.
+                if (_pronouns != null && !_pronounOptions.contains(_pronouns))
+                  DropdownMenuItem(value: _pronouns, child: Text(_pronouns!)),
+              ],
+              onChanged: (value) => setState(() => _pronouns = value),
             ),
             const SizedBox(height: 16),
             if (_status != null)

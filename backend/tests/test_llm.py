@@ -85,8 +85,8 @@ def test_replies_parse_and_degrade(monkeypatch):
 
 def test_user_prompt_includes_recent_question():
     p = llm._build_user_prompt("water", None, [], [], recent_question="Are you hungry?")
-    assert 'asked her: "Are you hungry?"' in p
-    assert "asked her" not in llm._build_user_prompt("water", None, [], [])
+    assert 'asked them: "Are you hungry?"' in p
+    assert "asked them" not in llm._build_user_prompt("water", None, [], [])
 
 
 def test_reply_prompt_has_context_and_answer_spread():
@@ -96,11 +96,21 @@ def test_reply_prompt_has_context_and_answer_spread():
         {"role": "heard", "text": "Are you hungry?"},  # the question itself
     ]
     p = llm._build_reply_prompt("Are you hungry?", turns)
-    assert 'She was asked: "Did you sleep well?"' in p
-    assert 'She said: "Yes, I slept well."' in p
+    assert 'The user was asked: "Did you sleep well?"' in p
+    assert 'The user said: "Yes, I slept well."' in p
     # The question appears once as the ask, not duplicated into the context.
     assert p.count("Are you hungry?") == 1
     assert "Never assume which answer is true" in p
+
+
+def test_gate_parses_verdicts_and_fails_closed(monkeypatch):
+    _use_real_with(monkeypatch, '{"directed": true}')
+    assert asyncio.run(llm.is_directed_at_user("Are you hungry?")) is True
+    _use_real_with(monkeypatch, '{"directed": false}')
+    assert asyncio.run(llm.is_directed_at_user("She seemed tired today.")) is False
+    # Garbage output gates closed — never surfaces a wrong question.
+    _use_real_with(monkeypatch, "hmm, hard to say")
+    assert asyncio.run(llm.is_directed_at_user("Are you hungry?")) is False
 
 
 def test_transcript_hallucination_filter():

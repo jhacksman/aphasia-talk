@@ -65,7 +65,7 @@ class InputBar extends StatelessWidget {
           onTap: onAsk,
           semantics: asking
               ? 'Stop listening to the question'
-              : 'Ask — for the person talking with her: tap, ask your question aloud, tap again',
+              : 'Ask — for the conversation partner: tap, ask your question aloud, tap again',
         ),
       ],
     );

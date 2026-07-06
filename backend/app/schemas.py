@@ -93,6 +93,7 @@ class ProfileModel(BaseModel):
     name: str | None = None
     birth_year: int | None = Field(default=None, ge=1900, le=2030)
     region: str | None = None
+    pronouns: str | None = None  # e.g. "she/her"; None keeps prompts neutral
     idiolect_notes: str | None = None
 
 

@@ -105,8 +105,8 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
     saved = db.bookmarked_texts_for_word(req.word)
     bookmarked_set = set(saved) | set(req.bookmarked_sentences)
     history = req.history_context or db.top_words()
-    # If someone just asked her something (Ask mode), let a word tap double
-    # as a reply to it — she may answer by tapping "water" instead of the
+    # If someone just asked the user something (Ask mode), let a word tap double
+    # as a reply to it — they may answer by tapping "water" instead of the
     # question card. Goes in the user prompt; the system prompt stays stable.
     recent_question = _recent_heard_question()
 
@@ -195,10 +195,16 @@ async def ask(
     audio: UploadFile | None = File(None),
     text: str | None = Form(None),
     format: str = "wav",
+    gate: bool = False,
 ) -> AskResponse:
-    """A caregiver's question to her — spoken (transcribed) or typed — logged
-    as a heard turn. Distinct from /transcribe (her dictation), which seeds
-    word generation."""
+    """A question spoken (transcribed) or typed to the user, logged as a
+    heard turn. Distinct from /transcribe (the user's own dictation), which
+    seeds word generation.
+
+    gate=true is for wake-word capture: the transcript must pass the
+    directed-at-the-user LLM gate or it is silently discarded — never
+    shown, never logged. Button/typed capture doesn't gate; a human
+    deliberately captured that audio and reviews the transcript."""
     if text is not None and text.strip():
         question = text.strip()
     elif audio is not None:
@@ -213,13 +219,20 @@ async def ask(
             return AskResponse(text="", turn_id=None)
     else:
         raise HTTPException(status_code=400, detail="Provide audio or text")
+    if gate:
+        try:
+            directed = await llm.is_directed_at_user(question)
+        except httpx.HTTPError:
+            directed = False  # gate closed when the classifier is unreachable
+        if not directed:
+            return AskResponse(text="", turn_id=None)
     turn = db.add_conversation_turn("heard", question)
     return AskResponse(text=question, turn_id=turn["id"])
 
 
 @app.post("/respond", response_model=GenerateResponse)
 async def respond(req: RespondRequest) -> GenerateResponse:
-    """Candidate replies to a question someone asked her."""
+    """Candidate replies to a question someone asked the user."""
     db.log_usage(action="asked", sentence_text=req.question)
     texts, related = await llm.generate_replies(
         question=req.question,
@@ -291,7 +304,7 @@ def _profile_response(profile: Profile) -> ProfileResponse:
 @app.post("/speak-log")
 async def speak_log(payload: dict) -> dict:
     """Record that a sentence was spoken aloud (for usage weighting and as
-    her side of the conversation log)."""
+    the user's side of the conversation log)."""
     text = payload.get("text")
     db.log_usage(
         action="spoken",
