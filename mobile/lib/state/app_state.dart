@@ -37,8 +37,12 @@ class AppState extends ChangeNotifier {
   List<Bookmark> bookmarks = const [];
   String selectedSentence = '';
 
+  /// The latest question someone asked the user (Ask mode). Shown in the
+  /// question strip until replaced or dismissed — never auto-dismissed.
+  String? currentQuestion;
+
   /// Monotonic token so a stale generation response never overwrites a newer
-  /// tap (she may tap a second word before the first request returns).
+  /// tap (the user may tap a second word before the first request returns).
   int _requestSeq = 0;
 
   WordCategory? get activeCategory {
@@ -49,7 +53,16 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    await Future.wait([_loadWords(), _loadBookmarks()]);
+    await Future.wait([_loadWords(), _loadBookmarks(), _loadQuestion()]);
+  }
+
+  Future<void> _loadQuestion() async {
+    try {
+      currentQuestion = await api.latestHeardQuestion();
+      notifyListeners();
+    } on ApiException {
+      // The strip stays in its placeholder state.
+    }
   }
 
   Future<void> _loadWords() async {
@@ -247,7 +260,7 @@ class AppState extends ChangeNotifier {
 
   /// Dictation flow: transcribe recorded audio, then run the word flow.
   Future<String?> submitDictation(List<int> audioBytes, {String format = 'wav'}) async {
-    // Participate in the same ordering as word taps: if she taps a grid word
+    // Participate in the same ordering as word taps: if the user taps a grid word
     // while transcription is in flight, the dictation result is stale and
     // must not clobber the newer selection.
     final seq = _requestSeq;
@@ -257,7 +270,7 @@ class AppState extends ChangeNotifier {
       if (seq != _requestSeq) return null; // Superseded by a newer tap.
       final text = result.text.trim();
       if (text.isEmpty) return null;
-      // Use the first word she said as the generation seed.
+      // Use the first word they said as the generation seed.
       final word = text.split(RegExp(r'\s+')).first;
       await selectWord(word);
       return text;
@@ -265,6 +278,58 @@ class AppState extends ChangeNotifier {
       _setConnection(ConnectionStatus.offline);
       return null;
     }
+  }
+
+  /// Ask flow: a caregiver recorded a question addressed to the user. Returns the
+  /// transcribed question, or null if nothing usable was heard.
+  Future<String?> submitAsk(List<int> audioBytes, {String format = 'wav'}) async {
+    try {
+      final result = await api.ask(audioBytes, format: format);
+      _setConnection(ConnectionStatus.online);
+      final text = result.text.trim();
+      if (text.isEmpty) return null;
+      currentQuestion = text;
+      notifyListeners();
+      return text;
+    } on ApiException {
+      _setConnection(ConnectionStatus.offline);
+      return null;
+    }
+  }
+
+  /// Hides the question card. Local only — the backend's context window
+  /// ages out on its own.
+  void dismissQuestion() {
+    currentQuestion = null;
+    notifyListeners();
+  }
+
+  /// Reply flow: the user tapped the question card; fill the sentences pane with
+  /// candidate replies. Replies aren't word-keyed; they group under "reply"
+  /// for bookmarking and usage logging.
+  Future<void> respondToQuestion() async {
+    final question = currentQuestion;
+    if (question == null) return;
+    final seq = ++_requestSeq;
+    currentWord = 'reply';
+    sentencesStatus = SentencesStatus.loading;
+    sentences = const [];
+    relatedWords = const [];
+    notifyListeners();
+
+    try {
+      final result = await api.respond(question);
+      if (seq != _requestSeq) return; // A newer tap superseded this request.
+      sentences = result.sentences;
+      relatedWords = result.relatedWords;
+      sentencesStatus = sentences.isEmpty ? SentencesStatus.empty : SentencesStatus.ready;
+      _setConnection(ConnectionStatus.online);
+    } on ApiException {
+      if (seq != _requestSeq) return;
+      sentencesStatus = SentencesStatus.offline;
+      _setConnection(ConnectionStatus.offline);
+    }
+    notifyListeners();
   }
 
   /// Returns true if the new backend answered a quick health probe. On an

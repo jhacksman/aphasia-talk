@@ -36,5 +36,13 @@ class Settings(BaseSettings):
     request_timeout: float = 120.0
     max_sentences: int = 8
 
+    # Conversation context (Ask mode). Prompts only see the last few turns
+    # from the last few minutes — a question from this morning must not
+    # color an afternoon reply. Retention bounds the table itself; the log
+    # is a working buffer, not an archive.
+    conversation_window_turns: int = 6
+    conversation_window_minutes: float = 5.0
+    conversation_retention_days: int = 7
+
 
 settings = Settings()

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -64,11 +64,19 @@ def init_db() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS conversation_turns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT NOT NULL CHECK (role IN ('heard', 'spoken')),
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         seeded = conn.execute("SELECT COUNT(*) AS n FROM word_config").fetchone()["n"]
         if seeded == 0:
             _seed_words(conn)
+        _prune_conversation(conn)
 
 
 def _seed_words(conn: sqlite3.Connection) -> None:
@@ -181,6 +189,71 @@ def set_setting(key: str, value: str) -> None:
                ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
             (key, value),
         )
+
+
+# ── Conversation log (Ask mode) ──────────────────────────────────────────────
+#
+# 'heard' = a transcribed question/remark addressed to the user; 'spoken' =
+# a sentence they spoke via TTS. Prompts only ever see a short recency window;
+# rows past the retention period are pruned at startup.
+
+def add_conversation_turn(role: str, text: str) -> dict:
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO conversation_turns (role, text, created_at)
+               VALUES (?, ?, ?)
+               RETURNING id, role, text, created_at""",
+            (role, text, _now_iso()),
+        )
+        row = cur.fetchone()
+    return dict(row)
+
+
+def recent_conversation_turns(
+    limit: int | None = None, max_age_minutes: float | None = None
+) -> list[dict]:
+    """The prompt-context window: last N turns no older than the age cap,
+    oldest first (chronological, ready to render into a prompt)."""
+    limit = limit if limit is not None else settings.conversation_window_turns
+    minutes = (
+        max_age_minutes
+        if max_age_minutes is not None
+        else settings.conversation_window_minutes
+    )
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    ).isoformat(timespec="seconds").replace("+00:00", "Z")
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT id, role, text, created_at FROM conversation_turns
+               WHERE created_at >= ? ORDER BY id DESC LIMIT ?""",
+            (cutoff, limit),
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
+def list_conversation_turns(limit: int = 20) -> list[dict]:
+    """Recent turns regardless of the prompt window (for the UI), newest first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT id, role, text, created_at FROM conversation_turns
+               ORDER BY id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def clear_conversation() -> int:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM conversation_turns")
+        return cur.rowcount
+
+
+def _prune_conversation(conn: sqlite3.Connection) -> None:
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=settings.conversation_retention_days)
+    ).isoformat(timespec="seconds").replace("+00:00", "Z")
+    conn.execute("DELETE FROM conversation_turns WHERE created_at < ?", (cutoff,))
 
 
 def top_words(limit: int = 6) -> list[str]:

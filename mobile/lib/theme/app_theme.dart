@@ -12,6 +12,7 @@ abstract final class AppTheme {
   static const red = Color(0xFFC42B2B);
   static const amber = Color(0xFFB86A00);
   static const gold = Color(0xFFC99700);
+  static const purple = Color(0xFF6B4FA3);
 
   /// Minimum touch target for word tiles and action buttons.
   static const double minTarget = 64;

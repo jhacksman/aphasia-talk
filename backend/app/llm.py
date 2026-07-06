@@ -44,16 +44,16 @@ async def aclose() -> None:
 # section to this; the composed result is constant per deployment (one user),
 # so vLLM still prefix-caches it and TTFT stays ~0.12s. Keep it byte-stable.
 BASE_SYSTEM_PROMPT = """\
-You are a communication assistant for a person with aphasia (difficulty producing language) caused by Alzheimer's disease. Your job is to generate clear, natural sentences that express what she might be trying to say.
+You are a communication assistant for a person with aphasia (difficulty producing language). Your job is to generate clear, natural sentences that express what they might be trying to say.
 
 Rules:
 - Generate 6-8 sentences per word, ranging from simple needs to more expressive/emotional thoughts
 - Sentences should be first-person ("I..." or "Can you..." or "Please...")
 - Mix practical sentences ("I need water") with deeper/emotional ones ("I miss how things used to be")
 - Keep sentences short (under 15 words) — they will be spoken aloud by TTS
-- If the user has bookmarked sentences for this word, those preferences indicate her style and needs — generate similar sentences
-- Also suggest 4-6 related words that she might want to tap next
-- Never generate anything condescending, childish, or patronizing — she is an adult with full comprehension, she just can't produce the words herself
+- If the user has bookmarked sentences for this word, those preferences indicate their style and needs — generate similar sentences
+- Also suggest 4-6 related words that they might want to tap next
+- Never generate anything condescending, childish, or patronizing — the user is an adult with full comprehension, they just can't produce the words themselves
 - Output valid JSON only: {"sentences": [...], "related_words": [...]}"""
 
 
@@ -62,15 +62,84 @@ def _build_user_prompt(
     category: str | None,
     bookmarked: list[str],
     history: list[str],
+    recent_question: str | None = None,
 ) -> str:
-    parts = [f'The word she tapped is: "{word}".']
+    parts = [f'The word the user tapped is: "{word}".']
     if category:
         parts.append(f"It is from the category: {category}.")
     if bookmarked:
         joined = "; ".join(f'"{b}"' for b in bookmarked)
-        parts.append(f"Sentences she has previously saved for this word: {joined}.")
+        parts.append(f"Sentences they have previously saved for this word: {joined}.")
     if history:
-        parts.append(f"Recent words she tapped: {', '.join(history)}.")
+        parts.append(f"Recent words they tapped: {', '.join(history)}.")
+    if recent_question:
+        parts.append(
+            f'A moment ago someone asked them: "{recent_question}". If the word '
+            "relates to the question, some sentences should work as replies to it."
+        )
+    parts.append('Generate JSON: {"sentences": [...strings...], "related_words": [...strings...]}.')
+    return " ".join(parts)
+
+
+# Gate for wake-word capture (ASK_MODE_PROPOSAL.md): only speech directed AT
+# the user may reach their screen. Constant so vLLM prefix-caches it.
+GATE_SYSTEM_PROMPT = """\
+You screen speech captured near a person with aphasia (they understand language fully but cannot produce it). Decide whether the transcript is a question or request spoken directly TO them — something in the second person that they might want to answer, like "Are you hungry?" or "Do you want to sit outside?".
+
+Not directed at them: speech ABOUT them in the third person ("she seemed tired", "he's already eaten"), television or radio dialogue, conversation between other people, fragments, or noise. A bare greeting or attention-getter with nothing to answer ("hey there", "good morning") is also false — there must be an actual question or request.
+
+When uncertain, answer false — a missed question costs a repeat; a wrong one confuses the user.
+Output JSON only: {"directed": true or false}"""
+
+
+async def is_directed_at_user(text: str) -> bool:
+    """True if the transcript is a question/request addressed directly to
+    the user. Used to gate wake-word captures; failures gate closed (False)."""
+    if settings.mock_inference:
+        return text.rstrip().endswith("?")
+
+    body = {
+        "model": settings.vllm_model,
+        "messages": [
+            {"role": "system", "content": GATE_SYSTEM_PROMPT},
+            {"role": "user", "content": f'Transcript: "{text}" /no_think'},
+        ],
+        "temperature": 0.0,
+        "max_tokens": 16,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    resp = await _get_client().post(
+        f"{settings.vllm_url}/v1/chat/completions", json=body
+    )
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"] or ""
+    try:
+        return bool(_extract_json(content).get("directed") is True)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return False
+
+
+def _build_reply_prompt(question: str, context_turns: list[dict]) -> str:
+    parts = []
+    # Turns before the question itself, chronological, so the model sees the
+    # exchange the way the room heard it.
+    prior = [t for t in context_turns if t["text"] != question]
+    if prior:
+        lines = "; ".join(
+            ("The user was asked" if t["role"] == "heard" else "The user said")
+            + f': "{t["text"]}"'
+            for t in prior
+        )
+        parts.append(f"Recent conversation: {lines}.")
+    parts.append(f'Someone just asked the user: "{question}".')
+    parts.append(
+        "Generate candidate REPLIES the user might want to give. The replies "
+        "must span the possible answers: include at least one affirmative, one "
+        "negative, one uncertain or deferring, and one that redirects to what "
+        "they might actually want. Never assume which answer is true for them. "
+        "Related words should be words they might tap to steer their reply."
+    )
     parts.append('Generate JSON: {"sentences": [...strings...], "related_words": [...strings...]}.')
     return " ".join(parts)
 
@@ -105,17 +174,10 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-async def generate_sentences(
-    word: str,
-    category: str | None,
-    bookmarked: list[str],
-    history: list[str],
-    system_prompt: str = BASE_SYSTEM_PROMPT,
+async def _chat_sentences(
+    user_prompt: str, system_prompt: str
 ) -> tuple[list[str], list[str]]:
-    if settings.mock_inference:
-        return _mock_generate(word, category, bookmarked)
-
-    user_prompt = _build_user_prompt(word, category, bookmarked, history)
+    """One text chat call to vLLM, coerced to (sentences, related_words)."""
     body = {
         "model": settings.vllm_model,
         "messages": [
@@ -146,6 +208,37 @@ async def generate_sentences(
     return sentences[: settings.max_sentences], related[:6]
 
 
+async def generate_sentences(
+    word: str,
+    category: str | None,
+    bookmarked: list[str],
+    history: list[str],
+    system_prompt: str = BASE_SYSTEM_PROMPT,
+    recent_question: str | None = None,
+) -> tuple[list[str], list[str]]:
+    if settings.mock_inference:
+        return _mock_generate(word, category, bookmarked)
+
+    user_prompt = _build_user_prompt(
+        word, category, bookmarked, history, recent_question
+    )
+    return await _chat_sentences(user_prompt, system_prompt)
+
+
+async def generate_replies(
+    question: str,
+    context_turns: list[dict],
+    system_prompt: str = BASE_SYSTEM_PROMPT,
+) -> tuple[list[str], list[str]]:
+    """Candidate replies to a question someone asked the user (Ask mode)."""
+    if settings.mock_inference:
+        return _mock_replies()
+
+    return await _chat_sentences(
+        _build_reply_prompt(question, context_turns), system_prompt
+    )
+
+
 async def generate_from_image(
     image_bytes: bytes, mime: str, system_prompt: str = BASE_SYSTEM_PROMPT
 ) -> tuple[str, float, list[str], list[str]]:
@@ -170,7 +263,7 @@ async def generate_from_image(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "What is the main object, and what might she want to say about it? /no_think"},
+                    {"type": "text", "text": "What is the main object, and what might the user want to say about it? /no_think"},
                     {"type": "image_url", "image_url": {"url": data_url}},
                 ],
             },
@@ -243,6 +336,22 @@ _RELATED = {
     "please": ["help", "thank you", "water", "need", "now", "want"],
     "okay": ["yes", "no", "good", "understand", "fine", "thank you"],
 }
+
+
+def _mock_replies() -> tuple[list[str], list[str]]:
+    # Deterministic reply spread mirroring the real prompt's requirement:
+    # affirmative / negative / deferral / redirect / emotional.
+    return (
+        [
+            "Yes, please.",
+            "No, thank you.",
+            "Maybe a little later.",
+            "I am not sure. Can you help me decide?",
+            "I would rather do something else.",
+            "That sounds nice.",
+        ],
+        ["yes", "no", "later", "help", "rest", "water"],
+    )
 
 
 def _mock_generate(word: str, category: str | None, bookmarked: list[str]) -> tuple[list[str], list[str]]:

@@ -138,17 +138,19 @@ class Bookmark {
 }
 
 class Profile {
-  const Profile({this.name, this.birthYear, this.region, this.idiolectNotes});
+  const Profile({this.name, this.birthYear, this.region, this.pronouns, this.idiolectNotes});
 
   final String? name;
   final int? birthYear;
   final String? region;
+  final String? pronouns;
   final String? idiolectNotes;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
         name: json['name'] as String?,
         birthYear: (json['birth_year'] as num?)?.toInt(),
         region: json['region'] as String?,
+        pronouns: json['pronouns'] as String?,
         idiolectNotes: json['idiolect_notes'] as String?,
       );
 
@@ -158,6 +160,7 @@ class Profile {
         'name': name,
         'birth_year': birthYear,
         'region': region,
+        'pronouns': pronouns,
       };
 }
 
@@ -180,6 +183,20 @@ class VoiceStatus {
         originalFilename: json['original_filename'] as String?,
         transcript: json['transcript'] as String?,
         durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+      );
+}
+
+class AskResult {
+  const AskResult({required this.text, this.turnId});
+
+  /// Empty text means the audio yielded nothing usable (silence or a
+  /// filtered hallucination); the caller shows a calm "try again".
+  final String text;
+  final int? turnId;
+
+  factory AskResult.fromJson(Map<String, dynamic> json) => AskResult(
+        text: (json['text'] as String?) ?? '',
+        turnId: (json['turn_id'] as num?)?.toInt(),
       );
 }
 

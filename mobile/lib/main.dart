@@ -10,7 +10,7 @@ import 'state/app_state.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Landscape is the primary orientation for the two-pane layout (SPEC.md),
-  // but portrait remains allowed — the layout adapts rather than locking her out.
+  // but portrait remains allowed — the layout adapts rather than locking anyone out.
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
