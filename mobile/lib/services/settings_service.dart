@@ -25,7 +25,7 @@ class SettingsService {
   Future<void> setBackendUrl(String url) => _prefs.setString(_kBackendUrl, url.trim());
 
   /// 'fast' = on-device system voice (instant, offline).
-  /// 'cloned' = her cloned voice from the Spark (falls back to fast offline).
+  /// 'cloned' = the patient's cloned voice from the Spark (falls back to fast offline).
   String get voiceMode => _prefs.getString(_kVoiceMode) ?? 'fast';
   Future<void> setVoiceMode(String mode) => _prefs.setString(_kVoiceMode, mode);
 

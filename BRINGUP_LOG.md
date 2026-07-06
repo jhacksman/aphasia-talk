@@ -121,7 +121,7 @@ bottom and continue at the first unchecked step. Keep it updated as you go.
        emotional mix, dignified ("My mind is not working well today",
        "It is hard to find the right words"). Fixed duplicate
        related_words with a case-insensitive dedupe in _coerce_payload.
-       NOT DONE: her real profile (name, birth year, region) — needs Jack
+       NOT DONE: the user's real profile (name, birth year, region) — needs Jack
        (PUT /profile or web Settings), then re-judge register per
        CLAUDE.md.
 - [x] 7b. Pinned VLLM_IMAGE to the digest
@@ -160,5 +160,5 @@ bottom and continue at the first unchecked step. Keep it updated as you go.
   (0.23.0, GB10 NVFP4 kernels) + nvidia/Qwen3.6-35B-A3B-NVFP4 (vision
   capable) + whisper-cpp-server:sm121 + backend. All restart:
   unless-stopped. Remaining for the human: DHCP reservation, tablet
-  backend address, her real profile, then re-judge register. Uncommitted
+  backend address, the user's real profile, then re-judge register. Uncommitted
   repo changes listed in step 8 — commit when Jack says so.

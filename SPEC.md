@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A tablet communication aid for a person with Alzheimer's disease and aphasia. The user (Mom) taps large word buttons on a two-pane screen; the left pane shows a categorized word grid, the right pane shows AI-generated sentences using that word. She can tap a sentence to have the tablet speak it aloud, or tap another word to refine. Additional input modes: microphone (speak a word → transcribe → generate sentences) and camera (photograph an object → identify it → generate sentences). All inference runs locally on an NVIDIA DGX Spark. No cloud APIs.
+A tablet communication aid for a person with aphasia (e.g. from Alzheimer's disease or stroke). The user taps large word buttons on a two-pane screen; the left pane shows a categorized word grid, the right pane shows AI-generated sentences using that word. They can tap a sentence to have the tablet speak it aloud, or tap another word to refine. Additional input modes: microphone (speak a word → transcribe → generate sentences) and camera (photograph an object → identify it → generate sentences). All inference runs locally on an NVIDIA DGX Spark. No cloud APIs.
 
 ---
 
@@ -160,7 +160,7 @@ The UI matches the reference mockup — a two-pane tablet layout:
 
 7. **Tap [Keyboard]** →
    - Simple on-screen keyboard appears
-   - User types a word (for caregiver use, or if Mom can manage)
+   - User types a word (for caregiver use, or if the user can manage)
    - Triggers sentence generation
 
 ### Design Rules (AAC Research)
@@ -324,16 +324,16 @@ Get the word grid configuration (categories + words + positions).
 This is the constant system prompt that gets prefix-cached by vLLM:
 
 ```
-You are a communication assistant for a person with aphasia (difficulty producing language) caused by Alzheimer's disease. Your job is to generate clear, natural sentences that express what she might be trying to say.
+You are a communication assistant for a person with aphasia (difficulty producing language) caused by Alzheimer's disease. Your job is to generate clear, natural sentences that express what they might be trying to say.
 
 Rules:
 - Generate 6-8 sentences per word, ranging from simple needs to more expressive/emotional thoughts
 - Sentences should be first-person ("I..." or "Can you..." or "Please...")
 - Mix practical sentences ("I need water") with deeper/emotional ones ("I miss how things used to be")
 - Keep sentences short (under 15 words) — they will be spoken aloud by TTS
-- If the user has bookmarked sentences for this word, those preferences indicate her style and needs — generate similar sentences
-- Also suggest 4-6 related words that she might want to tap next
-- Never generate anything condescending, childish, or patronizing — she is an adult with full comprehension, she just can't produce the words herself
+- If the user has bookmarked sentences for this word, those preferences indicate their style and needs — generate similar sentences
+- Also suggest 4-6 related words that they might want to tap next
+- Never generate anything condescending, childish, or patronizing — the user is an adult with full comprehension, they just can't produce the words themselves
 - Output valid JSON only: {"sentences": [...], "related_words": [...]}
 ```
 
@@ -494,10 +494,10 @@ Words can be added/removed by a caregiver through a settings interface. **Positi
 ## Personalization (User-Curated)
 
 - **No AI auto-saving** — the AI does not decide what to remember
-- **Explicit bookmarking** — Mom (or caregiver) taps a star icon on a sentence to save it
+- **Explicit bookmarking** — the user (or caregiver) taps a star icon on a sentence to save it
 - **Bookmarked sentences pin to top** — next time that word is tapped, bookmarked sentences appear first (before AI-generated ones)
 - **"My Sentences" screen** — dedicated view showing all bookmarks, grouped by word/category, for direct access without going through the word grid
-- **Usage weighting** — the backend tracks which words and sentences are tapped most often, and includes this context in the generation prompt (so the AI generates sentences in her style, not generic ones)
+- **Usage weighting** — the backend tracks which words and sentences are tapped most often, and includes this context in the generation prompt (so the AI generates sentences in the user's style, not generic ones)
 
 ---
 

@@ -233,7 +233,7 @@ class ApiService {
     return VoiceStatus.fromJson(body);
   }
 
-  /// Upload her voice recording (wav/mp3). Backend normalizes and
+  /// Upload a voice sample (wav/mp3). Backend normalizes and
   /// auto-transcribes it via whisper when no transcript is provided.
   Future<VoiceStatus> uploadVoiceReference(
     List<int> audioBytes, {

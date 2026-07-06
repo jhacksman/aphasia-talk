@@ -29,7 +29,7 @@ Design rules enforced in code (AAC research, see SPEC.md):
 - **No time pressure** — nothing auto-dismisses; snackbars are informational only.
 - **Offline resilience** — word grid, last sentences per word, and bookmarks are
   cached locally; the app stays useful when the Spark is off.
-- **Stale-response guard** — if she taps a second word before the first
+- **Stale-response guard** — if the user taps a second word before the first
   generation returns, the older response is discarded (tested).
 
 ## Develop

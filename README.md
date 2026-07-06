@@ -4,14 +4,14 @@ Communication aid for a person with Alzheimer's and aphasia. Tablet app (iOS + A
 
 ## How It Works
 
-Mom taps a word button → AI generates sentences she might be trying to say → she taps one → tablet speaks it aloud.
+The user taps a word button → AI generates sentences they might be trying to say → they tap one → the tablet speaks it aloud.
 
 **Three input modes:**
 - **Word grid** — Categorized buttons (People, Needs, Feelings, Actions, Places). Tap a word, get sentences.
 - **Microphone** — Speak a word, get sentences.
 - **Camera** — Photograph an object, AI identifies it, get sentences.
 
-**Sentences are user-curated** — Mom bookmarks the ones she likes. Bookmarks pin to the top next time. No AI auto-saving.
+**Sentences are user-curated** — the user (or a caregiver) bookmarks the good ones. Bookmarks pin to the top next time. No AI auto-saving.
 
 ## Stack
 

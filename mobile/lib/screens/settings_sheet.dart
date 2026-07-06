@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -40,6 +44,15 @@ class _SettingsSheetState extends State<SettingsSheet> {
   VoiceStatus? _voiceStatus;
   bool _uploadingVoice = false;
   String? _voiceMessage;
+
+  // In-app voice-sample recording (alternative to file upload).
+  final AudioRecorder _voiceRecorder = AudioRecorder();
+  bool _recordingVoice = false;
+
+  /// Set synchronously on entry so a double-tap (likely with impaired motor
+  /// control) can't restart the recorder mid-stop or double-start it —
+  /// same lesson as home_screen's _dictationBusy.
+  bool _voiceRecordingBusy = false;
 
   static const _regions = <String, String>{
     'us-south': 'US — South',
@@ -89,14 +102,19 @@ class _SettingsSheetState extends State<SettingsSheet> {
       return;
     }
 
+    await _sendReference(file.bytes!, file.name);
+  }
+
+  /// Shared tail of both capture paths (picked file / in-app recording).
+  Future<void> _sendReference(List<int> bytes, String filename) async {
     setState(() {
       _uploadingVoice = true;
       _voiceMessage = null;
     });
     try {
       final status = await widget.state.api.uploadVoiceReference(
-        file.bytes!,
-        filename: file.name,
+        bytes,
+        filename: filename,
       );
       if (!mounted) return;
       setState(() {
@@ -125,10 +143,80 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   @override
   void dispose() {
+    _voiceRecorder.dispose();
     _urlController.dispose();
     _nameController.dispose();
     _yearController.dispose();
     super.dispose();
+  }
+
+  /// Record a voice sample right here — no file wrangling needed. Tap to
+  /// start, tap again to stop; the recording is uploaded like any file.
+  Future<void> _toggleVoiceRecording() async {
+    if (_voiceRecordingBusy) return;
+    _voiceRecordingBusy = true;
+    try {
+      if (_recordingVoice) {
+        await _stopVoiceRecording();
+      } else {
+        await _startVoiceRecording();
+      }
+    } finally {
+      _voiceRecordingBusy = false;
+    }
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    setState(() => _recordingVoice = false);
+    final path = await _voiceRecorder.stop();
+    List<int>? bytes;
+    if (path != null) {
+      try {
+        bytes = await File(path).readAsBytes();
+      } catch (_) {
+        bytes = null;
+      }
+    }
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      // Never leave the stale "Recording…" instruction as the last word.
+      setState(() => _voiceMessage = 'Nothing was recorded — please try again.');
+      return;
+    }
+    await _sendReference(bytes, 'recorded-in-app.wav');
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (!await _voiceRecorder.hasPermission()) {
+      if (mounted) {
+        setState(() =>
+            _voiceMessage = 'Microphone permission is needed to record.');
+      }
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    try {
+      await _voiceRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: '${dir.path}/voice_sample.wav',
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _voiceMessage = 'The microphone isn\'t available right now.');
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _recordingVoice = true;
+        _voiceMessage =
+            'Recording… read a few sentences naturally, then tap Stop.';
+      });
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -334,22 +422,37 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   ),
                   RadioListTile<String>(
                     value: 'cloned',
-                    title: const Text('Her voice (cloned)', style: TextStyle(fontSize: 16)),
+                    title: const Text('My voice (cloned)', style: TextStyle(fontSize: 16)),
                     subtitle: Text(
                       _voiceStatus?.clonedAvailable == true
                           ? 'Ready — from "${_voiceStatus?.originalFilename ?? 'recording'}". '
                               'Falls back to the built-in voice if offline.'
-                          : 'Upload a recording of her voice to set this up.',
+                          : 'Record or upload a voice sample to set this up.',
                     ),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ],
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _uploadingVoice ? null : _uploadVoiceRecording,
+                  onPressed: _uploadingVoice ? null : _toggleVoiceRecording,
+                  icon: Icon(
+                    _recordingVoice ? Icons.stop_circle_outlined : Icons.mic_none,
+                    color: _recordingVoice ? Colors.red : null,
+                  ),
+                  label: Text(
+                    _recordingVoice ? 'Stop recording' : 'Record voice sample',
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      (_uploadingVoice || _recordingVoice) ? null : _uploadVoiceRecording,
                   icon: _uploadingVoice
                       ? const SizedBox(
                           width: 16,
@@ -361,8 +464,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     _uploadingVoice
                         ? 'Uploading…'
                         : _voiceStatus?.clonedAvailable == true
-                            ? 'Replace recording'
-                            : 'Upload recording (.wav or .mp3)',
+                            ? 'Replace (.wav or .mp3)'
+                            : 'Upload file (.wav or .mp3)',
                     style: const TextStyle(fontSize: 15),
                   ),
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
