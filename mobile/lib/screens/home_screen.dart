@@ -190,10 +190,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openSettings() {
+  Future<void> _openSettings() async {
+    // Release the microphone before Settings opens: its voice-sample
+    // recorder must never contend with a live dictation/Ask recording
+    // (the sheet would cover the only buttons that could stop them).
+    if (_recording || _askRecording) {
+      await _recorder.cancel();
+      if (mounted) {
+        setState(() {
+          _recording = false;
+          _askRecording = false;
+        });
+      }
+    }
+    if (!mounted) return;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      // Explicit Close button only: no drag/tap-away dismissal, so a
+      // voice-sample recording can't be silently abandoned mid-take.
+      isDismissible: false,
+      enableDrag: false,
       builder: (_) => SettingsSheet(state: state),
     );
   }

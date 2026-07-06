@@ -49,6 +49,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
   final AudioRecorder _voiceRecorder = AudioRecorder();
   bool _recordingVoice = false;
 
+  /// Set synchronously on entry so a double-tap (likely with impaired motor
+  /// control) can't restart the recorder mid-stop or double-start it —
+  /// same lesson as home_screen's _dictationBusy.
+  bool _voiceRecordingBusy = false;
+
   static const _regions = <String, String>{
     'us-south': 'US — South',
     'us-northeast': 'US — Northeast',
@@ -148,25 +153,40 @@ class _SettingsSheetState extends State<SettingsSheet> {
   /// Record a voice sample right here — no file wrangling needed. Tap to
   /// start, tap again to stop; the recording is uploaded like any file.
   Future<void> _toggleVoiceRecording() async {
-    if (_recordingVoice) {
-      setState(() => _recordingVoice = false);
-      final path = await _voiceRecorder.stop();
-      if (path == null) return;
-      List<int>? bytes;
+    if (_voiceRecordingBusy) return;
+    _voiceRecordingBusy = true;
+    try {
+      if (_recordingVoice) {
+        await _stopVoiceRecording();
+      } else {
+        await _startVoiceRecording();
+      }
+    } finally {
+      _voiceRecordingBusy = false;
+    }
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    setState(() => _recordingVoice = false);
+    final path = await _voiceRecorder.stop();
+    List<int>? bytes;
+    if (path != null) {
       try {
         bytes = await File(path).readAsBytes();
       } catch (_) {
         bytes = null;
       }
-      if (!mounted) return;
-      if (bytes == null || bytes.isEmpty) {
-        setState(() => _voiceMessage = 'Nothing was recorded — please try again.');
-        return;
-      }
-      await _sendReference(bytes, 'recorded-in-app.wav');
+    }
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      // Never leave the stale "Recording…" instruction as the last word.
+      setState(() => _voiceMessage = 'Nothing was recorded — please try again.');
       return;
     }
+    await _sendReference(bytes, 'recorded-in-app.wav');
+  }
 
+  Future<void> _startVoiceRecording() async {
     if (!await _voiceRecorder.hasPermission()) {
       if (mounted) {
         setState(() =>
