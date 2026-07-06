@@ -24,11 +24,12 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
   ASK_MODE_PROPOSAL.md). SQLite for bookmarks/config.
   `MOCK_INFERENCE=true` fabricates output so everything runs GPU-less
   (mock /tts returns a beep).
-- Voice: the tablet offers "Fast" (on-device system TTS, default) and "Her
+- Voice: the tablet offers "Fast" (on-device system TTS, default) and "My
   voice" (Qwen3-TTS *Base* clone served by spark/tts on :8002 — Base is the
-  only variant that clones). Caregiver uploads a wav/mp3 from tablet
-  Settings; backend normalizes (ffmpeg) + auto-transcribes it via whisper.
-  Cloned mode always falls back to the system voice — speech never fails.
+  only variant that clones). The voice sample is recorded in-app or
+  uploaded (wav/mp3) from tablet Settings; backend normalizes (ffmpeg) +
+  auto-transcribes it via whisper. Cloned mode always falls back to the
+  system voice — speech never fails.
 - `mobile/` — the release Flutter app (Android + iOS). The single app; a
   duplicate tree (mobile_app/) was removed deliberately — don't resurrect it.
 - `frontend/` — single-file web client; quickest way to exercise the backend.

@@ -30,7 +30,7 @@ cd spark
 docker build -t whisper-cpp-server:sm121 ./whisper
 
 # 2b. Build the voice-cloning TTS image (one-time; powers the tablet's
-#     "Her voice" option — the stack runs fine without it, speech falls
+#     "My voice" option — the stack runs fine without it, speech falls
 #     back to the tablet's built-in voice)
 docker build -t aphasia-tts:qwen3 ./tts
 

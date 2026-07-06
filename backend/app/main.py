@@ -313,7 +313,7 @@ async def upload_voice_reference(
     audio: UploadFile = File(...),
     transcript: str | None = Form(default=None),
 ) -> dict:
-    """Upload her voice recording (mp3/wav). Normalized, auto-transcribed
+    """Upload a voice sample (mp3/wav). Normalized, auto-transcribed
     via whisper when no transcript is given, and stored for the TTS clone."""
     data = await audio.read()
     try:

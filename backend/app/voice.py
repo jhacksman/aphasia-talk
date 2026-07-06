@@ -1,6 +1,7 @@
 """Cloned-voice support: reference storage and TTS proxying.
 
-The caregiver uploads a recording of her voice (mp3/wav) from the tablet.
+A caregiver records or uploads a sample of the patient's voice (mp3/wav)
+from the tablet.
 We normalize it to 16 kHz mono WAV (ffmpeg), transcribe it with the whisper
 service already on the box (the clone needs reference text, and nobody
 should have to type out an old voicemail), and store both under
@@ -105,7 +106,7 @@ async def store_reference(data: bytes, filename: str, transcript: str | None) ->
     return get_status()
 
 
-# Synthesized WAVs keyed by (text, reference mtime): her bookmarked/repeated
+# Synthesized WAVs keyed by (text, reference mtime): bookmarked/repeated
 # sentences — the most-tapped by design — play instantly instead of paying
 # GPU synthesis on every tap. Invalidates automatically on a new reference.
 _wav_cache: dict[tuple[str, float], bytes] = {}

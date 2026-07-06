@@ -22,14 +22,14 @@ def test_voice_status_empty_by_default(client):
 def test_upload_reference_wav_autotranscribes(client):
     resp = client.post(
         "/voice/reference",
-        files={"audio": ("grandma.wav", _wav_bytes(), "audio/wav")},
+        files={"audio": ("sample.wav", _wav_bytes(), "audio/wav")},
     )
     assert resp.status_code == 200, resp.text
     status = resp.json()
     assert status["cloned_available"] is True
     # Mock whisper transcribes everything as "water".
     assert status["transcript"] == "water"
-    assert status["original_filename"] == "grandma.wav"
+    assert status["original_filename"] == "sample.wav"
     assert status["duration_seconds"] >= 3.9
 
     # Status persists for the Settings sheet.
@@ -71,7 +71,7 @@ def test_tts_409_without_reference(client):
 def test_tts_returns_wav_after_reference_upload(client):
     client.post(
         "/voice/reference",
-        files={"audio": ("grandma.wav", _wav_bytes(), "audio/wav")},
+        files={"audio": ("sample.wav", _wav_bytes(), "audio/wav")},
     )
     resp = client.post("/tts", json={"text": "I would like some tea."})
     assert resp.status_code == 200

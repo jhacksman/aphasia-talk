@@ -138,7 +138,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Route to the configured voice. The cloned voice needs the Spark; any
-  /// failure falls back to the on-device voice so she is never left silent.
+  /// failure falls back to the on-device voice so the user is never left silent.
   ///
   /// When we already know we're offline, skip the network attempt entirely —
   /// no per-tap timeout tax; the dot going green again re-enables the clone.
