@@ -18,11 +18,16 @@ from .config import settings
 _client: httpx.AsyncClient | None = None
 
 
-def _get_client() -> httpx.AsyncClient:
+def get_client() -> httpx.AsyncClient:
+    """Shared keep-alive client for all upstream services (vLLM, TTS)."""
     global _client
     if _client is None:
         _client = httpx.AsyncClient(timeout=settings.request_timeout)
     return _client
+
+
+# Backwards-compatible alias for internal callers.
+_get_client = get_client
 
 
 async def aclose() -> None:

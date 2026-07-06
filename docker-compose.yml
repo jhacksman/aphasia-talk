@@ -62,6 +62,25 @@ services:
           devices:
             - capabilities: [gpu]
 
+  # Voice-cloning TTS (Qwen3-TTS Base). Optional: the app's "Fast" voice is
+  # on-device; this powers the "Her voice" option in tablet Settings.
+  # Built on the Spark: docker build -t aphasia-tts:qwen3 spark/tts
+  tts:
+    image: ${TTS_IMAGE:-aphasia-tts:qwen3}
+    runtime: nvidia
+    restart: unless-stopped
+    environment:
+      - TTS_MODEL=${TTS_MODEL:-Qwen/Qwen3-TTS-12Hz-1.7B-Base}
+    volumes:
+      - ${MODELS_DIR:-/home/user/models}:/models
+      # Reference WAV written by the backend; paths must match on both sides.
+      - ./data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
   backend:
     build:
       context: .
@@ -74,9 +93,14 @@ services:
       - VLLM_URL=http://vllm:8000
       - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen3.6-35B-A3B-FP8}
       - WHISPER_URL=http://whisper:8001
+      - TTS_URL=http://tts:8002
+      - VOICE_DIR=/app/data/voice
       - DATABASE_PATH=/app/data/aphasia_talk.db
     volumes:
       - ./data:/app/data
+    # No depends_on for tts: the sidecar is optional (its image is built
+    # manually on the Spark) and the backend proxies to it lazily — a missing
+    # voice clone must never keep the core stack from starting.
     depends_on:
       vllm:
         condition: service_healthy

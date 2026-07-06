@@ -13,6 +13,7 @@ class SettingsService {
   final SharedPreferences _prefs;
 
   static const _kBackendUrl = 'backendUrl';
+  static const _kVoiceMode = 'voiceMode';
   static const _kWordsCache = 'wordsCache';
   static const _kSentenceCache = 'sentenceCache';
   static const _kBookmarksCache = 'bookmarksCache';
@@ -22,6 +23,11 @@ class SettingsService {
 
   String get backendUrl => _prefs.getString(_kBackendUrl) ?? '';
   Future<void> setBackendUrl(String url) => _prefs.setString(_kBackendUrl, url.trim());
+
+  /// 'fast' = on-device system voice (instant, offline).
+  /// 'cloned' = her cloned voice from the Spark (falls back to fast offline).
+  String get voiceMode => _prefs.getString(_kVoiceMode) ?? 'fast';
+  Future<void> setVoiceMode(String mode) => _prefs.setString(_kVoiceMode, mode);
 
   // ── Word grid cache ──
 

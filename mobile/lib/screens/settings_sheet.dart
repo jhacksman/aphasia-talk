@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -34,6 +35,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
   /// round-trips it instead of nulling it out.
   String? _customRegion;
 
+  // Speaking-voice section.
+  late String _voiceMode; // 'fast' | 'cloned'
+  VoiceStatus? _voiceStatus;
+  bool _uploadingVoice = false;
+  String? _voiceMessage;
+
   static const _regions = <String, String>{
     'us-south': 'US — South',
     'us-northeast': 'US — Northeast',
@@ -48,7 +55,72 @@ class _SettingsSheetState extends State<SettingsSheet> {
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: widget.state.settings.backendUrl);
+    _voiceMode = widget.state.settings.voiceMode;
     _loadProfile();
+    _loadVoiceStatus();
+  }
+
+  Future<void> _loadVoiceStatus() async {
+    try {
+      final status = await widget.state.api.voiceStatus();
+      if (mounted) setState(() => _voiceStatus = status);
+    } on ApiException {
+      // Unreachable; section still shows and upload can be retried.
+    }
+  }
+
+  Future<void> _setVoiceMode(String mode) async {
+    await widget.state.settings.setVoiceMode(mode);
+    if (mounted) setState(() => _voiceMode = mode);
+  }
+
+  Future<void> _uploadVoiceRecording() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['wav', 'mp3'],
+      withData: true,
+    );
+    final file = picked?.files.firstOrNull;
+    if (file == null || file.bytes == null) return; // Backed out — fine.
+    if (file.size > 50 * 1024 * 1024) {
+      // Fail before buffering/uploading a huge file just to be rejected.
+      setState(() => _voiceMessage =
+          'That file is too large — use a clip under ~5 minutes.');
+      return;
+    }
+
+    setState(() {
+      _uploadingVoice = true;
+      _voiceMessage = null;
+    });
+    try {
+      final status = await widget.state.api.uploadVoiceReference(
+        file.bytes!,
+        filename: file.name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _voiceStatus = status;
+        _voiceMessage = 'Voice ready — heard: "${_shorten(status.transcript)}"';
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        // Server answers carry a specific, caregiver-facing message from the
+        // backend ("too short", "use .wav or .mp3", …) — show that, not a
+        // generic guess that sends them fixing the wrong thing.
+        _voiceMessage = e.isServerResponse
+            ? e.message
+            : 'Couldn\'t reach the speech computer to upload.';
+      });
+    } finally {
+      if (mounted) setState(() => _uploadingVoice = false);
+    }
+  }
+
+  String _shorten(String? text) {
+    if (text == null || text.isEmpty) return '';
+    return text.length <= 60 ? text : '${text.substring(0, 57)}…';
   }
 
   @override
@@ -240,6 +312,71 @@ class _SettingsSheetState extends State<SettingsSheet> {
               ],
               onChanged: (value) => setState(() => _pronouns = value),
             ),
+            const SizedBox(height: 20),
+            Text('Speaking voice', style: theme.textTheme.labelLarge),
+            Text(
+              'The voice the tablet speaks with.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            RadioGroup<String>(
+              groupValue: _voiceMode,
+              onChanged: (mode) {
+                if (mode != null) _setVoiceMode(mode);
+              },
+              child: Column(
+                children: [
+                  const RadioListTile<String>(
+                    value: 'fast',
+                    title: Text('Fast (built-in voice)', style: TextStyle(fontSize: 16)),
+                    subtitle: Text('Instant; works even when the speech computer is off.'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  RadioListTile<String>(
+                    value: 'cloned',
+                    title: const Text('Her voice (cloned)', style: TextStyle(fontSize: 16)),
+                    subtitle: Text(
+                      _voiceStatus?.clonedAvailable == true
+                          ? 'Ready — from "${_voiceStatus?.originalFilename ?? 'recording'}". '
+                              'Falls back to the built-in voice if offline.'
+                          : 'Upload a recording of her voice to set this up.',
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _uploadingVoice ? null : _uploadVoiceRecording,
+                  icon: _uploadingVoice
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.upload_file),
+                  label: Text(
+                    _uploadingVoice
+                        ? 'Uploading…'
+                        : _voiceStatus?.clonedAvailable == true
+                            ? 'Replace recording'
+                            : 'Upload recording (.wav or .mp3)',
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                ),
+              ],
+            ),
+            if (_voiceMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _voiceMessage!,
+                  style: TextStyle(fontSize: 14, color: theme.colorScheme.primary),
+                ),
+              ),
             const SizedBox(height: 16),
             if (_status != null)
               Padding(

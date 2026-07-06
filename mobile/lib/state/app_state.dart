@@ -129,12 +129,35 @@ class AppState extends ChangeNotifier {
   Future<void> speakSentence(String text) async {
     selectedSentence = text;
     notifyListeners();
-    await tts.speak(text);
+    await _speak(text);
     await api.logSpoken(text, currentWord);
   }
 
   Future<void> speakSelected() async {
-    if (selectedSentence.isNotEmpty) await tts.speak(selectedSentence);
+    if (selectedSentence.isNotEmpty) await _speak(selectedSentence);
+  }
+
+  /// Route to the configured voice. The cloned voice needs the Spark; any
+  /// failure falls back to the on-device voice so she is never left silent.
+  ///
+  /// When we already know we're offline, skip the network attempt entirely —
+  /// no per-tap timeout tax; the dot going green again re-enables the clone.
+  Future<void> _speak(String text) async {
+    if (settings.voiceMode == 'cloned' && connection != ConnectionStatus.offline) {
+      try {
+        final wav = await api.ttsAudio(text);
+        await tts.playWav(Uint8List.fromList(wav));
+        _setConnection(ConnectionStatus.online);
+        return;
+      } on ApiException catch (e) {
+        // Network-level failure = offline (keeps the dot honest); a server
+        // answer (409 no reference / 503 sidecar) just means fall back.
+        if (!e.isServerResponse) _setConnection(ConnectionStatus.offline);
+      } catch (_) {
+        // Playback (platform) failure — fall back to the system voice.
+      }
+    }
+    await tts.speak(text);
   }
 
   void clearSelected() {
