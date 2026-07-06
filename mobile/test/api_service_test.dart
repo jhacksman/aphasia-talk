@@ -77,6 +77,55 @@ void main() {
     expect(result.sentences.single.text, 'I want a drink.');
   });
 
+  test('ask uploads multipart audio and parses the logged question', () async {
+    final client = MockClient((request) async {
+      expect(request.url.path, '/ask');
+      expect(request.headers['content-type'], contains('multipart/form-data'));
+      return http.Response(
+        jsonEncode({'text': 'Are you hungry?', 'turn_id': 4}),
+        200,
+      );
+    });
+
+    final result = await serviceWith(client).ask([1, 2, 3]);
+    expect(result.text, 'Are you hungry?');
+    expect(result.turnId, 4);
+  });
+
+  test('respond posts the question and parses replies', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'sentences': [
+            {'text': 'Yes, please.', 'bookmarked': false},
+          ],
+          'related_words': ['yes'],
+        }),
+        200,
+      );
+    });
+
+    final result = await serviceWith(client).respond('Are you hungry?');
+    expect(captured.url.path, '/respond');
+    expect(jsonDecode(captured.body), {'question': 'Are you hungry?'});
+    expect(result.sentences.single.text, 'Yes, please.');
+  });
+
+  test('latestHeardQuestion returns the newest heard turn, skipping spoken', () async {
+    final client = MockClient((request) async => http.Response(
+          jsonEncode({
+            'turns': [
+              {'id': 9, 'role': 'spoken', 'text': 'Yes.', 'created_at': 'x'},
+              {'id': 8, 'role': 'heard', 'text': 'Are you hungry?', 'created_at': 'x'},
+            ],
+          }),
+          200,
+        ));
+    expect(await serviceWith(client).latestHeardQuestion(), 'Are you hungry?');
+  });
+
   test('bookmarks CRUD hits the right endpoints', () async {
     final calls = <String>[];
     final client = MockClient((request) async {

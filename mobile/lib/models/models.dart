@@ -161,6 +161,20 @@ class Profile {
       };
 }
 
+class AskResult {
+  const AskResult({required this.text, this.turnId});
+
+  /// Empty text means the audio yielded nothing usable (silence or a
+  /// filtered hallucination); the caller shows a calm "try again".
+  final String text;
+  final int? turnId;
+
+  factory AskResult.fromJson(Map<String, dynamic> json) => AskResult(
+        text: (json['text'] as String?) ?? '',
+        turnId: (json['turn_id'] as num?)?.toInt(),
+      );
+}
+
 class TranscribeResult {
   const TranscribeResult({required this.text, required this.confidence});
 

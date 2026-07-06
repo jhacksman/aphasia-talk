@@ -1,6 +1,14 @@
-# Proposal: Ask mode — question capture + contextual replies
+# Ask mode — question capture + contextual replies
 
-**Status: PROPOSED, not implemented.** (2026-07-02, drafted on gb10-02.)
+**Status: phase 1 BUILT (2026-07-03) — backend + web + Flutter UI, all
+tests green, verified live on gb10-02.** Wake-word capture (phase 2)
+remains unbuilt, pending her name / what family calls her.
+
+Implementation notes beyond this design: `/ask` also accepts a typed
+question (form field `text`) for mic-less clients and loud rooms; whisper.cpp
+was observed to crash on its first inference after a long idle (GB10 CUDA
+error), so `/ask` retries once over the container's ~15s auto-restart before
+returning the calm empty answer.
 
 ## The problem
 

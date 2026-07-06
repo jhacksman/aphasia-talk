@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Bottom action bar: Dictate, Photo, Keyboard. Large targets, always in the
-/// same order and position.
+/// Bottom action bar: Dictate, Photo, Keyboard, Ask. Large targets, always
+/// in the same order and position (Ask was appended after the original
+/// three — existing button positions are immutable).
 class InputBar extends StatelessWidget {
   const InputBar({
     super.key,
@@ -11,12 +12,18 @@ class InputBar extends StatelessWidget {
     required this.onDictate,
     required this.onPhoto,
     required this.onKeyboard,
+    required this.asking,
+    required this.onAsk,
   });
 
   final bool recording;
   final VoidCallback onDictate;
   final VoidCallback onPhoto;
   final VoidCallback onKeyboard;
+
+  /// True while the Ask button is recording a caregiver's question.
+  final bool asking;
+  final VoidCallback onAsk;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +55,17 @@ class InputBar extends StatelessWidget {
           color: AppTheme.blue,
           onTap: onKeyboard,
           semantics: 'Type a word',
+        ),
+        const SizedBox(width: 10),
+        _ActionButton(
+          icon: asking ? Icons.stop_circle_outlined : Icons.contact_support_outlined,
+          label: asking ? 'Listening…' : 'Ask',
+          color: AppTheme.purple,
+          highlighted: asking,
+          onTap: onAsk,
+          semantics: asking
+              ? 'Stop listening to the question'
+              : 'Ask — for the person talking with her: tap, ask your question aloud, tap again',
         ),
       ],
     );

@@ -17,6 +17,8 @@
     --amber: #B86A00;
     --amber-light: #FDF3E3;
     --gold: #C99700;
+    --purple: #6B4FA3;
+    --purple-light: #F0EBF8;
     --bg: #F6F5F3;
     --surface: #FFFFFF;
     --border: rgba(0,0,0,0.10);
@@ -42,6 +44,7 @@
       --green-light: #0D2A1F;
       --red-light: #2C1010;
       --amber-light: #2A1C08;
+      --purple-light: #221A33;
       --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.06);
     }
   }
@@ -115,6 +118,31 @@
   .btn-speak:hover { background: var(--blue-dark); }
   .btn-speak:disabled { opacity: 0.4; cursor: default; }
   .btn-speak i { font-size: 17px; }
+
+  /* ── Question strip (Ask mode) — permanently reserved so nothing shifts ── */
+  .question-strip {
+    margin: 8px 12px 0; flex-shrink: 0; min-height: 54px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .question-card {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    background: var(--purple-light); cursor: pointer; text-align: left;
+    border: 1.5px solid var(--purple); border-radius: var(--radius-md);
+    padding: 10px 14px; min-height: 54px;
+    font-family: inherit; font-size: 18px; font-weight: 600; color: var(--text);
+    box-shadow: var(--shadow);
+  }
+  .question-card i { color: var(--purple); font-size: 22px; flex-shrink: 0; }
+  .question-card .question-hint {
+    margin-left: auto; flex-shrink: 0; font-size: 12px; font-weight: 600;
+    color: var(--purple); white-space: nowrap; padding-left: 10px;
+  }
+  .question-placeholder {
+    flex: 1; color: var(--text-hint); font-size: 14px; font-style: italic;
+    padding: 0 6px;
+  }
+  .action-btn.ask:hover, .action-btn.ask:active { background: var(--purple-light); color: var(--purple); border-color: var(--purple); }
+  .action-btn.ask.recording { background: var(--purple-light); color: var(--purple); border-color: var(--purple); animation: pulse 1s ease-in-out infinite; }
 
   /* ── Main panels ── */
   .panels { display: flex; gap: 10px; flex: 1; min-height: 0; padding: 10px 12px; }
@@ -279,7 +307,7 @@
   }
   @media (max-height: 600px) { .word-tile { min-height: 54px; } .panels { padding: 6px 10px; } }
   @media (prefers-reduced-motion: reduce) {
-    .action-btn.mic.recording { animation: none; opacity: 0.75; }
+    .action-btn.mic.recording, .action-btn.ask.recording { animation: none; opacity: 0.75; }
     .spinner { animation-duration: 1.6s; }
     * { transition: none !important; }
   }
@@ -303,6 +331,16 @@
   </div>
   <button class="btn-clear" onclick="clearOutput()" aria-label="Clear message" title="Clear"><i class="ti ti-x"></i></button>
   <button class="btn-speak" id="btn-speak" onclick="speakOutput()" aria-label="Speak message" disabled><i class="ti ti-volume"></i> Speak</button>
+</div>
+
+<!-- Question strip: space is always reserved so the layout never shifts -->
+<div class="question-strip" id="question-strip">
+  <span class="question-placeholder" id="question-placeholder">When someone asks her a question, it will appear here.</span>
+  <button class="question-card" id="question-card" style="display:none" onclick="respondToQuestion()" aria-label="Show ways to reply to this question">
+    <i class="ti ti-message-question"></i><span id="question-text"></span>
+    <span class="question-hint">tap to reply</span>
+  </button>
+  <button class="btn-clear" id="question-dismiss" style="display:none" onclick="dismissQuestion()" aria-label="Dismiss question" title="Dismiss"><i class="ti ti-x"></i></button>
 </div>
 
 <div class="panels">
@@ -341,6 +379,9 @@
   <button class="action-btn keyboard" onclick="toggleKeyboard()" aria-label="Type a word or phrase">
     <i class="ti ti-keyboard"></i><span>Keyboard</span>
   </button>
+  <button class="action-btn ask" id="ask-btn" onclick="toggleAsk()" aria-label="Ask — for the person talking with her: tap, ask your question aloud, tap again">
+    <i class="ti ti-message-question"></i><span>Ask</span>
+  </button>
 </div>
 
 <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
@@ -352,6 +393,16 @@
       onkeydown="if(event.key==='Enter') addFromKeyboard()" autocomplete="off"/>
     <button class="ov-btn" onclick="addFromKeyboard()">Go</button>
     <button class="ov-btn secondary" onclick="toggleKeyboard()">Done</button>
+  </div>
+</div>
+
+<!-- Ask overlay: typed-question fallback when no microphone is available -->
+<div class="overlay" id="ask-overlay" role="dialog" aria-label="Type the question you asked her">
+  <div class="ov-row">
+    <input class="ov-input" id="ask-input" type="text" placeholder="Type the question you asked her…"
+      onkeydown="if(event.key==='Enter') submitTypedAsk()" autocomplete="off"/>
+    <button class="ov-btn" onclick="submitTypedAsk()">Go</button>
+    <button class="ov-btn secondary" onclick="toggleAskOverlay()">Done</button>
   </div>
 </div>
 
@@ -380,6 +431,10 @@
     <button class="ov-btn" onclick="saveProfile()">Save voice</button>
     <button class="ov-btn secondary" onclick="toggleSettings()">Close</button>
   </div>
+
+  <div class="ov-row" style="margin-top:14px">
+    <button class="ov-btn secondary" onclick="clearConversation()">Clear conversation log</button>
+  </div>
 </div>
 
 <script>
@@ -398,6 +453,9 @@ let selectedSentence = "";
 let bookmarks = [];           // [{id, text, word, category}]
 let micActive = false;
 let kbOpen = false, settingsOpen = false;
+let askActive = false, askOverlayOpen = false;
+let currentQuestion = null;
+const QUESTION_PLACEHOLDER = "When someone asks her a question, it will appear here.";
 
 const $ = (id) => document.getElementById(id);
 
@@ -653,6 +711,175 @@ function toggleMic() {
   sr.start(); window._sr = sr;
 }
 
+// ── Ask mode: capture a question asked TO her, offer candidate replies ────────
+function setQuestion(text) {
+  currentQuestion = text || null;
+  $("question-card").style.display = currentQuestion ? "" : "none";
+  $("question-dismiss").style.display = currentQuestion ? "" : "none";
+  $("question-placeholder").style.display = currentQuestion ? "none" : "";
+  if (currentQuestion) $("question-text").textContent = currentQuestion;
+}
+function questionNotice(msg) {
+  // Calm transient text in the reserved strip; never a popup, never a timer.
+  $("question-placeholder").textContent = msg;
+  $("question-placeholder").style.display = "";
+}
+function dismissQuestion() {
+  // Local dismiss only — the context window in the backend ages out on its
+  // own; "Clear conversation log" in Settings wipes it for real.
+  setQuestion(null);
+  $("question-placeholder").textContent = QUESTION_PLACEHOLDER;
+}
+
+async function respondToQuestion() {
+  if (!currentQuestion) return;
+  currentWord = null;
+  renderWords();
+  $("head-word").textContent = "reply";
+  sentencesLoading();
+  renderRelated(null);
+  try {
+    const data = await api("/respond", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: currentQuestion }),
+    });
+    setConn("online");
+    renderSentences(data.sentences, "reply");
+    renderRelated(data.related_words);
+  } catch (e) {
+    setConn("offline");
+    $("sentences-list").innerHTML =
+      `<div class="empty-state"><i class="ti ti-cloud-off"></i>` +
+      `<p>Can't reach the speech computer. Check it's on and the address in settings.</p></div>`;
+  }
+}
+
+let _askRecorder = null, _askChunks = [];
+async function toggleAsk() {
+  const btn = $("ask-btn");
+  if (askActive) {
+    askActive = false;
+    btn.classList.remove("recording");
+    if (_askRecorder && _askRecorder.state !== "inactive") _askRecorder.stop();
+    return;
+  }
+  // No mic (plain-http LAN origin, or no hardware): type the question instead.
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    toggleAskOverlay();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _askChunks = [];
+    _askRecorder = new MediaRecorder(stream);
+    _askRecorder.ondataavailable = (e) => { if (e.data.size) _askChunks.push(e.data); };
+    _askRecorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      askActive = false;
+      btn.classList.remove("recording");
+      await submitAskAudio(new Blob(_askChunks, { type: _askRecorder.mimeType }));
+    };
+    _askRecorder.start();
+    askActive = true;
+    btn.classList.add("recording");
+  } catch (e) {
+    toggleAskOverlay(); // mic denied/unavailable — typed fallback
+  }
+}
+
+async function submitAskAudio(blob) {
+  questionNotice("Working out what was said…");
+  try {
+    // whisper.cpp wants 16-bit WAV; browsers record webm/mp4 — re-encode.
+    const wav = await blobToWav16k(blob);
+    const fd = new FormData();
+    fd.append("audio", wav, "question.wav");
+    const res = await fetch(backendUrl.replace(/\/$/, "") + "/ask?format=wav", { method: "POST", body: fd });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    setConn("online");
+    if (data.text) setQuestion(data.text);
+    else questionNotice("I didn't catch that — tap Ask and try the question again.");
+  } catch (e) {
+    setConn("offline");
+    questionNotice("Couldn't reach the speech computer — the question wasn't saved.");
+  }
+}
+
+async function blobToWav16k(blob) {
+  const buf = await blob.arrayBuffer();
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await ac.decodeAudioData(buf);
+  ac.close();
+  const rate = 16000;
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const src = offline.createBufferSource();
+  src.buffer = decoded;
+  src.connect(offline.destination);
+  src.start();
+  const rendered = await offline.startRendering();
+  return encodeWav(rendered.getChannelData(0), rate);
+}
+
+function encodeWav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+function toggleAskOverlay() {
+  if (kbOpen) toggleKeyboard();
+  askOverlayOpen = !askOverlayOpen;
+  $("ask-overlay").classList.toggle("open", askOverlayOpen);
+  if (askOverlayOpen) setTimeout(() => $("ask-input").focus(), 250);
+}
+
+async function submitTypedAsk() {
+  const input = $("ask-input");
+  const val = input.value.trim();
+  if (!val) { toggleAskOverlay(); return; }
+  input.value = "";
+  toggleAskOverlay();
+  try {
+    const fd = new FormData();
+    fd.append("text", val);
+    const res = await fetch(backendUrl.replace(/\/$/, "") + "/ask", { method: "POST", body: fd });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    setConn("online");
+    setQuestion(data.text);
+  } catch (e) {
+    setConn("offline");
+    questionNotice("Couldn't reach the speech computer — the question wasn't saved.");
+  }
+}
+
+async function loadConversation() {
+  // Restore the newest heard question into the strip (e.g. after a reload).
+  try {
+    const data = await api("/conversation?limit=10");
+    const heard = data.turns.find((t) => t.role === "heard");
+    if (heard) setQuestion(heard.text);
+  } catch (e) { /* strip stays in its placeholder state */ }
+}
+
+async function clearConversation() {
+  try {
+    await api("/conversation", { method: "DELETE" });
+    dismissQuestion();
+  } catch (e) { setConn("offline"); }
+}
+
 // ── Photo → vision ────────────────────────────────────────────────────────────
 function triggerPhoto() { $("photo-input").click(); }
 async function handlePhoto(input) {
@@ -766,6 +993,7 @@ async function init() {
   sentencesEmpty();
   await loadWords();
   await loadBookmarks();
+  await loadConversation();
 }
 init();
 </script>

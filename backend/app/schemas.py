@@ -33,6 +33,28 @@ class TranscribeResponse(BaseModel):
     confidence: float
 
 
+class AskResponse(BaseModel):
+    # text == "" means the audio yielded nothing usable (silence, filtered
+    # hallucination); the client shows a calm "try again" to the caregiver.
+    text: str
+    turn_id: int | None = None
+
+
+class RespondRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+
+
+class ConversationTurn(BaseModel):
+    id: int
+    role: str  # 'heard' | 'spoken'
+    text: str
+    created_at: str
+
+
+class ConversationResponse(BaseModel):
+    turns: list[ConversationTurn]
+
+
 class Bookmark(BaseModel):
     id: int
     text: str

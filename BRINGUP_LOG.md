@@ -139,6 +139,19 @@ bottom and continue at the first unchecked step. Keep it updated as you go.
        - Optional perf: DFlash speculative decoding (AEON drafter) if
          faster decode ever matters; current latency already in budget.
 
+## Feature work after bring-up
+
+- 2026-07-03: **Ask mode phase 1 built** (design: ASK_MODE_PROPOSAL.md).
+  Backend (/ask, /respond, /conversation, conversation_turns table, question
+  context in /generate, hallucination filter), web client (Ask button +
+  question strip + typed fallback), Flutter (Ask button, QuestionStrip,
+  state + tests). Backend suite 35 passed; smoke test fully green after;
+  live /respond 2.0s with a proper yes/no/defer/redirect spread.
+  GOTCHA found: whisper-server crashed with a CUDA internal error on its
+  first inference after ~34h idle (restart: unless-stopped recovered it in
+  ~15s; requests 0.2s once warm). /ask now retries once across that window.
+  If this recurs elsewhere, consider a periodic warm-up ping.
+
 ## Session notes
 
 - 2026-07-02: Survey done. Log created. Proceeding with steps 1-2.

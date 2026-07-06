@@ -57,6 +57,7 @@ def _build_user_prompt(
     category: str | None,
     bookmarked: list[str],
     history: list[str],
+    recent_question: str | None = None,
 ) -> str:
     parts = [f'The word she tapped is: "{word}".']
     if category:
@@ -66,6 +67,35 @@ def _build_user_prompt(
         parts.append(f"Sentences she has previously saved for this word: {joined}.")
     if history:
         parts.append(f"Recent words she tapped: {', '.join(history)}.")
+    if recent_question:
+        parts.append(
+            f'A moment ago someone asked her: "{recent_question}". If the word '
+            "relates to the question, some sentences should work as replies to it."
+        )
+    parts.append('Generate JSON: {"sentences": [...strings...], "related_words": [...strings...]}.')
+    return " ".join(parts)
+
+
+def _build_reply_prompt(question: str, context_turns: list[dict]) -> str:
+    parts = []
+    # Turns before the question itself, chronological, so the model sees the
+    # exchange the way the room heard it.
+    prior = [t for t in context_turns if t["text"] != question]
+    if prior:
+        lines = "; ".join(
+            ("She was asked" if t["role"] == "heard" else "She said")
+            + f': "{t["text"]}"'
+            for t in prior
+        )
+        parts.append(f"Recent conversation: {lines}.")
+    parts.append(f'Someone just asked her: "{question}".')
+    parts.append(
+        "Generate candidate REPLIES she might want to give. The replies must "
+        "span the possible answers: include at least one affirmative, one "
+        "negative, one uncertain or deferring, and one that redirects to what "
+        "she might actually want. Never assume which answer is true for her. "
+        "Related words should be words she might tap to steer her reply."
+    )
     parts.append('Generate JSON: {"sentences": [...strings...], "related_words": [...strings...]}.')
     return " ".join(parts)
 
@@ -100,17 +130,10 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-async def generate_sentences(
-    word: str,
-    category: str | None,
-    bookmarked: list[str],
-    history: list[str],
-    system_prompt: str = BASE_SYSTEM_PROMPT,
+async def _chat_sentences(
+    user_prompt: str, system_prompt: str
 ) -> tuple[list[str], list[str]]:
-    if settings.mock_inference:
-        return _mock_generate(word, category, bookmarked)
-
-    user_prompt = _build_user_prompt(word, category, bookmarked, history)
+    """One text chat call to vLLM, coerced to (sentences, related_words)."""
     body = {
         "model": settings.vllm_model,
         "messages": [
@@ -139,6 +162,37 @@ async def generate_sentences(
         # than 500, so the client can show a "tap again" state.
         return [], []
     return sentences[: settings.max_sentences], related[:6]
+
+
+async def generate_sentences(
+    word: str,
+    category: str | None,
+    bookmarked: list[str],
+    history: list[str],
+    system_prompt: str = BASE_SYSTEM_PROMPT,
+    recent_question: str | None = None,
+) -> tuple[list[str], list[str]]:
+    if settings.mock_inference:
+        return _mock_generate(word, category, bookmarked)
+
+    user_prompt = _build_user_prompt(
+        word, category, bookmarked, history, recent_question
+    )
+    return await _chat_sentences(user_prompt, system_prompt)
+
+
+async def generate_replies(
+    question: str,
+    context_turns: list[dict],
+    system_prompt: str = BASE_SYSTEM_PROMPT,
+) -> tuple[list[str], list[str]]:
+    """Candidate replies to a question someone asked her (Ask mode)."""
+    if settings.mock_inference:
+        return _mock_replies()
+
+    return await _chat_sentences(
+        _build_reply_prompt(question, context_turns), system_prompt
+    )
 
 
 async def generate_from_image(
@@ -238,6 +292,22 @@ _RELATED = {
     "please": ["help", "thank you", "water", "need", "now", "want"],
     "okay": ["yes", "no", "good", "understand", "fine", "thank you"],
 }
+
+
+def _mock_replies() -> tuple[list[str], list[str]]:
+    # Deterministic reply spread mirroring the real prompt's requirement:
+    # affirmative / negative / deferral / redirect / emotional.
+    return (
+        [
+            "Yes, please.",
+            "No, thank you.",
+            "Maybe a little later.",
+            "I am not sure. Can you help me decide?",
+            "I would rather do something else.",
+            "That sounds nice.",
+        ],
+        ["yes", "no", "later", "help", "rest", "water"],
+    )
 
 
 def _mock_generate(word: str, category: str | None, bookmarked: list[str]) -> tuple[list[str], list[str]]:

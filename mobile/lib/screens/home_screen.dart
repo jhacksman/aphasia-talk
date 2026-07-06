@@ -9,6 +9,7 @@ import 'package:record/record.dart';
 import '../state/app_state.dart';
 import '../widgets/input_bar.dart';
 import '../widgets/output_bar.dart';
+import '../widgets/question_strip.dart';
 import '../widgets/sentence_list.dart';
 import '../widgets/word_grid.dart';
 import 'keyboard_sheet.dart';
@@ -36,6 +37,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// recorder that is still starting.
   bool _dictationBusy = false;
 
+  /// Ask mode (caregiver question capture) shares the one recorder, so the
+  /// two flows are mutually exclusive; same double-tap guard as dictation.
+  bool _askRecording = false;
+  bool _askBusy = false;
+
   AppState get state => widget.state;
 
   @override
@@ -45,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _toggleDictation() async {
-    if (_dictationBusy) return;
+    if (_dictationBusy || _askRecording || _askBusy) return;
     _dictationBusy = true;
     try {
       if (_recording) {
@@ -103,6 +109,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _toggleAsk() async {
+    if (_askBusy || _recording || _dictationBusy) return;
+    _askBusy = true;
+    try {
+      if (_askRecording) {
+        await _stopAsk();
+      } else {
+        await _startAsk();
+      }
+    } finally {
+      _askBusy = false;
+    }
+  }
+
+  Future<void> _startAsk() async {
+    if (!await _recorder.hasPermission()) {
+      _notice('Microphone permission is needed to capture a question.');
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: '${dir.path}/question.wav',
+      );
+    } catch (_) {
+      _notice('The microphone isn\'t available right now.');
+      return;
+    }
+    if (mounted) setState(() => _askRecording = true);
+  }
+
+  Future<void> _stopAsk() async {
+    setState(() => _askRecording = false);
+    final path = await _recorder.stop();
+    List<int>? bytes;
+    if (path != null) {
+      try {
+        bytes = await File(path).readAsBytes();
+      } catch (_) {
+        bytes = null;
+      }
+    }
+    if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      _notice('I didn\'t catch the question. Please tap Ask and try again.');
+      return;
+    }
+    final text = await state.submitAsk(bytes);
+    if (text == null && mounted) {
+      _notice('I didn\'t catch the question. Please tap Ask and try again.');
+    }
+  }
+
   Future<void> _takePhoto() async {
     try {
       final image = await _picker.pickImage(
@@ -153,6 +217,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: OutputBar(state: state, onSettings: _openSettings),
               ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: QuestionStrip(state: state),
+              ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(10),
@@ -173,6 +241,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onDictate: _toggleDictation,
                   onPhoto: _takePhoto,
                   onKeyboard: _openKeyboard,
+                  asking: _askRecording,
+                  onAsk: _toggleAsk,
                 ),
               ),
             ],

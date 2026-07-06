@@ -16,7 +16,8 @@ web client (frontend/)         ──LAN──▶    ├─ backend  :8080  Fast
 ```
 
 - `backend/` — FastAPI. Endpoints: /generate, /vision, /transcribe, /words,
-  /bookmarks, /profile, /speak-log, /health. SQLite for bookmarks/config.
+  /bookmarks, /profile, /speak-log, /health, plus Ask mode: /ask, /respond,
+  /conversation (see ASK_MODE_PROPOSAL.md). SQLite for bookmarks/config.
   `MOCK_INFERENCE=true` fabricates output so everything runs GPU-less.
 - `mobile/` — the release Flutter app (Android + iOS). The single app; a
   duplicate tree (mobile_app/) was removed deliberately — don't resurrect it.

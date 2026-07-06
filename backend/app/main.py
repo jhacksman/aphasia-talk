@@ -6,11 +6,14 @@ LAN; no auth, no multi-tenancy.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import httpx
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -18,13 +21,17 @@ from . import db, llm, whisper
 from .config import settings
 from .profile import Profile, compose_system_prompt, formative_decade
 from .schemas import (
+    AskResponse,
     Bookmark,
     BookmarkCreate,
     BookmarkList,
+    ConversationResponse,
+    ConversationTurn,
     GenerateRequest,
     GenerateResponse,
     ProfileModel,
     ProfileResponse,
+    RespondRequest,
     Sentence,
     TranscribeResponse,
     VisionResponse,
@@ -98,6 +105,10 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
     saved = db.bookmarked_texts_for_word(req.word)
     bookmarked_set = set(saved) | set(req.bookmarked_sentences)
     history = req.history_context or db.top_words()
+    # If someone just asked her something (Ask mode), let a word tap double
+    # as a reply to it — she may answer by tapping "water" instead of the
+    # question card. Goes in the user prompt; the system prompt stays stable.
+    recent_question = _recent_heard_question()
 
     texts, related = await llm.generate_sentences(
         word=req.word,
@@ -105,6 +116,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
         bookmarked=list(bookmarked_set),
         history=history,
         system_prompt=_active_system_prompt(),
+        recent_question=recent_question,
     )
     return GenerateResponse(
         sentences=_mark_bookmarked(texts, bookmarked_set),
@@ -140,6 +152,96 @@ async def transcribe(
         raise HTTPException(status_code=400, detail="Empty audio upload")
     text, confidence = await whisper.transcribe(data, format)
     return TranscribeResponse(text=text, confidence=confidence)
+
+
+# ── Ask mode: question capture + contextual replies ──────────────────────────
+
+# Generous ceiling for a spoken question (30s of 44.1kHz stereo WAV ≈ 5 MB);
+# bounds whisper latency if a client ever uploads something absurd.
+_MAX_ASK_AUDIO_BYTES = 25 * 1024 * 1024
+
+# whisper.cpp on GB10 has been seen to die with a CUDA internal error on its
+# first inference after a long idle; `restart: unless-stopped` brings it back
+# with the model loaded in ~15s. One patient retry turns that into a slow
+# success instead of an error the caregiver has to manage.
+_WHISPER_RETRY_DELAY_S = 20.0
+
+
+async def _transcribe_with_retry(data: bytes, fmt: str) -> str:
+    """Transcribe for /ask; returns "" (calm 'try again') if whisper is down
+    even after its restart window."""
+    try:
+        text, _confidence = await whisper.transcribe(data, fmt)
+        return text
+    except httpx.HTTPError:
+        await asyncio.sleep(_WHISPER_RETRY_DELAY_S)
+        try:
+            text, _confidence = await whisper.transcribe(data, fmt)
+            return text
+        except httpx.HTTPError:
+            return ""
+
+
+def _recent_heard_question() -> str | None:
+    """The newest 'heard' turn inside the context window, if any."""
+    for turn in reversed(db.recent_conversation_turns()):
+        if turn["role"] == "heard":
+            return turn["text"]
+    return None
+
+
+@app.post("/ask", response_model=AskResponse)
+async def ask(
+    audio: UploadFile | None = File(None),
+    text: str | None = Form(None),
+    format: str = "wav",
+) -> AskResponse:
+    """A caregiver's question to her — spoken (transcribed) or typed — logged
+    as a heard turn. Distinct from /transcribe (her dictation), which seeds
+    word generation."""
+    if text is not None and text.strip():
+        question = text.strip()
+    elif audio is not None:
+        data = await audio.read()
+        if not data:
+            raise HTTPException(status_code=400, detail="Empty audio upload")
+        if len(data) > _MAX_ASK_AUDIO_BYTES:
+            raise HTTPException(status_code=413, detail="Audio too long")
+        question = await _transcribe_with_retry(data, format)
+        if not question:
+            # Silence or a filtered hallucination — nothing is logged or shown.
+            return AskResponse(text="", turn_id=None)
+    else:
+        raise HTTPException(status_code=400, detail="Provide audio or text")
+    turn = db.add_conversation_turn("heard", question)
+    return AskResponse(text=question, turn_id=turn["id"])
+
+
+@app.post("/respond", response_model=GenerateResponse)
+async def respond(req: RespondRequest) -> GenerateResponse:
+    """Candidate replies to a question someone asked her."""
+    db.log_usage(action="asked", sentence_text=req.question)
+    texts, related = await llm.generate_replies(
+        question=req.question,
+        context_turns=db.recent_conversation_turns(),
+        system_prompt=_active_system_prompt(),
+    )
+    return GenerateResponse(
+        sentences=[Sentence(text=t) for t in texts],
+        related_words=related,
+    )
+
+
+@app.get("/conversation", response_model=ConversationResponse)
+async def get_conversation(limit: int = 20) -> ConversationResponse:
+    return ConversationResponse(
+        turns=[ConversationTurn(**t) for t in db.list_conversation_turns(limit)]
+    )
+
+
+@app.delete("/conversation")
+async def clear_conversation() -> dict:
+    return {"cleared": db.clear_conversation()}
 
 
 @app.get("/bookmarks", response_model=BookmarkList)
@@ -188,12 +290,16 @@ def _profile_response(profile: Profile) -> ProfileResponse:
 
 @app.post("/speak-log")
 async def speak_log(payload: dict) -> dict:
-    """Record that a sentence was spoken aloud (for usage weighting)."""
+    """Record that a sentence was spoken aloud (for usage weighting and as
+    her side of the conversation log)."""
+    text = payload.get("text")
     db.log_usage(
         action="spoken",
         word=payload.get("word"),
-        sentence_text=payload.get("text"),
+        sentence_text=text,
     )
+    if text:
+        db.add_conversation_turn("spoken", text)
     return {"logged": True}
 
 

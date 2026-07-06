@@ -113,6 +113,42 @@ class ApiService {
     return TranscribeResult.fromJson(body);
   }
 
+  /// Ask mode: a caregiver's spoken question to her — transcribed and logged
+  /// as a conversation turn on the backend.
+  Future<AskResult> ask(List<int> audioBytes, {String format = 'wav'}) async {
+    final request = http.MultipartRequest('POST', _uri('/ask?format=$format'))
+      ..files.add(http.MultipartFile.fromBytes('audio', audioBytes, filename: 'question.$format'));
+    final body = await _guard(() async {
+      final streamed = await _client.send(request).timeout(_timeout);
+      return _decode(await http.Response.fromStream(streamed));
+    });
+    return AskResult.fromJson(body);
+  }
+
+  /// Candidate replies to a question someone asked her.
+  Future<GenerateResult> respond(String question) async {
+    final body = await _guard(() async => _decode(await _client
+        .post(
+          _uri('/respond'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'question': question}),
+        )
+        .timeout(_timeout)));
+    return GenerateResult.fromJson(body);
+  }
+
+  /// Newest question someone asked her, if any (restores the question strip
+  /// after an app restart).
+  Future<String?> latestHeardQuestion() async {
+    final body = await _guard(() async =>
+        _decode(await _client.get(_uri('/conversation?limit=10')).timeout(_timeout)));
+    for (final turn in (body['turns'] as List?) ?? const []) {
+      final t = turn as Map<String, dynamic>;
+      if (t['role'] == 'heard') return t['text'] as String?;
+    }
+    return null;
+  }
+
   Future<List<Bookmark>> fetchBookmarks() async {
     final body = await _guard(() async =>
         _decode(await _client.get(_uri('/bookmarks')).timeout(_timeout)));

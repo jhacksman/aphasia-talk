@@ -72,3 +72,42 @@ def test_vision_tolerates_qualitative_confidence(monkeypatch):
 def test_vision_degrades_on_garbage(monkeypatch):
     _use_real_with(monkeypatch, "no json here")
     assert asyncio.run(llm.generate_from_image(b"x", "image/jpeg")) == ("this", 0.0, [], [])
+
+
+def test_replies_parse_and_degrade(monkeypatch):
+    _use_real_with(monkeypatch, '{"sentences": ["Yes, please."], "related_words": ["yes"]}')
+    sents, related = asyncio.run(llm.generate_replies("Are you hungry?", []))
+    assert sents == ["Yes, please."]
+    assert related == ["yes"]
+    _use_real_with(monkeypatch, "not json")
+    assert asyncio.run(llm.generate_replies("Are you hungry?", [])) == ([], [])
+
+
+def test_user_prompt_includes_recent_question():
+    p = llm._build_user_prompt("water", None, [], [], recent_question="Are you hungry?")
+    assert 'asked her: "Are you hungry?"' in p
+    assert "asked her" not in llm._build_user_prompt("water", None, [], [])
+
+
+def test_reply_prompt_has_context_and_answer_spread():
+    turns = [
+        {"role": "heard", "text": "Did you sleep well?"},
+        {"role": "spoken", "text": "Yes, I slept well."},
+        {"role": "heard", "text": "Are you hungry?"},  # the question itself
+    ]
+    p = llm._build_reply_prompt("Are you hungry?", turns)
+    assert 'She was asked: "Did you sleep well?"' in p
+    assert 'She said: "Yes, I slept well."' in p
+    # The question appears once as the ask, not duplicated into the context.
+    assert p.count("Are you hungry?") == 1
+    assert "Never assume which answer is true" in p
+
+
+def test_transcript_hallucination_filter():
+    from app import whisper
+
+    assert whisper.clean_transcript(" Thanks for watching! ") == ""
+    assert whisper.clean_transcript("you") == ""
+    assert whisper.clean_transcript("Are you hungry?") == "Are you hungry?"
+    # A real sentence containing a hallucination phrase is untouched.
+    assert whisper.clean_transcript("Say thank you to Susan.") == "Say thank you to Susan."

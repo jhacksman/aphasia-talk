@@ -33,9 +33,38 @@ Future<AppState> buildState(MockClient client) async {
   );
 }
 
-MockClient healthyBackend({List<String> sentences = const ['I am thirsty.']}) {
+MockClient healthyBackend({
+  List<String> sentences = const ['I am thirsty.'],
+  String? heardQuestion,
+}) {
   return MockClient((request) async {
     switch (request.url.path) {
+      case '/ask':
+        return http.Response(
+          jsonEncode({'text': 'Are you hungry?', 'turn_id': 1}),
+          200,
+        );
+      case '/respond':
+        return http.Response(
+          jsonEncode({
+            'sentences': [
+              {'text': 'Yes, please.', 'bookmarked': false},
+              {'text': 'No, thank you.', 'bookmarked': false},
+            ],
+            'related_words': ['yes', 'no'],
+          }),
+          200,
+        );
+      case '/conversation':
+        return http.Response(
+          jsonEncode({
+            'turns': [
+              if (heardQuestion != null)
+                {'id': 1, 'role': 'heard', 'text': heardQuestion, 'created_at': 'x'},
+            ],
+          }),
+          200,
+        );
       case '/words':
         return http.Response(
           jsonEncode({
@@ -261,6 +290,47 @@ void main() {
     expect(dictated, isNull, reason: 'superseded dictation is discarded');
     expect(state.currentWord, 'help');
     expect(state.sentences.single.text, 'About help');
+  });
+
+  test('submitAsk stores the question for the strip', () async {
+    final state = await buildState(healthyBackend());
+    await state.init();
+    final text = await state.submitAsk([1, 2, 3]);
+    expect(text, 'Are you hungry?');
+    expect(state.currentQuestion, 'Are you hungry?');
+  });
+
+  test('respondToQuestion fills the sentence pane with replies', () async {
+    final state = await buildState(healthyBackend());
+    await state.init();
+    await state.submitAsk([1, 2, 3]);
+    await state.respondToQuestion();
+    expect(state.sentencesStatus, SentencesStatus.ready);
+    expect(state.sentences.map((s) => s.text), contains('Yes, please.'));
+    expect(state.currentWord, 'reply');
+    expect(state.relatedWords, ['yes', 'no']);
+  });
+
+  test('init restores the latest heard question into the strip', () async {
+    final state =
+        await buildState(healthyBackend(heardQuestion: 'Do you want tea?'));
+    await state.init();
+    expect(state.currentQuestion, 'Do you want tea?');
+  });
+
+  test('dismissQuestion hides the card without touching sentences', () async {
+    final state = await buildState(healthyBackend());
+    await state.init();
+    await state.submitAsk([1, 2, 3]);
+    state.dismissQuestion();
+    expect(state.currentQuestion, isNull);
+  });
+
+  test('failed ask goes offline and leaves no question', () async {
+    final state = await buildState(deadBackend());
+    expect(await state.submitAsk([1, 2, 3]), isNull);
+    expect(state.currentQuestion, isNull);
+    expect(state.connection, ConnectionStatus.offline);
   });
 
   test('updateBackendUrl fails fast on an unreachable address', () async {
