@@ -81,9 +81,15 @@ void main() {
 
   group('Profile', () {
     test('update payload only carries app-editable fields', () {
-      const profile = Profile(name: 'Margaret', birthYear: 1948, region: 'uk');
+      const profile = Profile(
+          name: 'Margaret', birthYear: 1948, region: 'uk', pronouns: 'she/her');
       final json = profile.toUpdateJson();
-      expect(json, {'name': 'Margaret', 'birth_year': 1948, 'region': 'uk'});
+      expect(json, {
+        'name': 'Margaret',
+        'birth_year': 1948,
+        'region': 'uk',
+        'pronouns': 'she/her',
+      });
       // idiolect_notes intentionally absent so the backend's partial merge
       // never wipes it.
       expect(json.containsKey('idiolect_notes'), isFalse);
