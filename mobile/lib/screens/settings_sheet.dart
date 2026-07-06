@@ -79,6 +79,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
     );
     final file = picked?.files.firstOrNull;
     if (file == null || file.bytes == null) return; // Backed out — fine.
+    if (file.size > 50 * 1024 * 1024) {
+      // Fail before buffering/uploading a huge file just to be rejected.
+      setState(() => _voiceMessage =
+          'That file is too large — use a clip under ~5 minutes.');
+      return;
+    }
 
     setState(() {
       _uploadingVoice = true;
@@ -97,8 +103,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _voiceMessage = e.statusCode != null
-            ? 'That recording didn\'t work — try a clearer clip.'
+        // Server answers carry a specific, caregiver-facing message from the
+        // backend ("too short", "use .wav or .mp3", …) — show that, not a
+        // generic guess that sends them fixing the wrong thing.
+        _voiceMessage = e.isServerResponse
+            ? e.message
             : 'Couldn\'t reach the speech computer to upload.';
       });
     } finally {

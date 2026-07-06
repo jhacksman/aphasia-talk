@@ -61,7 +61,18 @@ def test_upload_rejects_wrong_type_and_short_clips(client):
     assert "too short" in resp.json()["detail"]
 
 
-def test_tts_returns_wav_in_mock_mode(client):
+def test_tts_409_without_reference(client):
+    # Same contract in mock and real mode: no uploaded reference -> 409,
+    # which is exactly what drives the tablet's fallback to the fast voice.
+    resp = client.post("/tts", json={"text": "I would like some tea."})
+    assert resp.status_code == 409
+
+
+def test_tts_returns_wav_after_reference_upload(client):
+    client.post(
+        "/voice/reference",
+        files={"audio": ("grandma.wav", _wav_bytes(), "audio/wav")},
+    )
     resp = client.post("/tts", json={"text": "I would like some tea."})
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "audio/wav"

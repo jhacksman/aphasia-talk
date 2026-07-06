@@ -108,7 +108,7 @@ echo "$TR" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["text"]; p
 # --- cloned voice ------------------------------------------------------------
 say "backend /voice (cloned-voice status)"
 VOICE=$(curl -sS -m 10 "$BACKEND/voice" || true)
-echo "$VOICE" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(f"   OK  cloned_available={d[\"cloned_available\"]}")' \
+echo "$VOICE" | python3 -c 'import json,sys; d=json.load(sys.stdin); v=d["cloned_available"]; print(f"   OK  cloned_available={v}")' \
   || bad "/voice failed: ${VOICE:0:200}"
 
 say "backend /tts (200 with reference, 409 without — 5xx means the sidecar is broken)"

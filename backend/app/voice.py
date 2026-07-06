@@ -49,11 +49,17 @@ def reference_path() -> Path:
     return _voice_dir() / REFERENCE_WAV
 
 
+def enabled() -> bool:
+    """Cloned voice is disabled entirely when TTS_URL is empty (config
+    contract) — the tablet then only offers the built-in voice."""
+    return bool(settings.tts_url.strip())
+
+
 def get_status() -> dict:
     """What the Settings sheet shows: is a cloned voice ready to use?"""
     meta_raw = db.get_setting(_META_KEY)
     meta = json.loads(meta_raw) if meta_raw else None
-    has_reference = reference_path().is_file() and meta is not None
+    has_reference = enabled() and reference_path().is_file() and meta is not None
     return {
         "cloned_available": has_reference,
         "original_filename": (meta or {}).get("original_filename"),
@@ -99,18 +105,37 @@ async def store_reference(data: bytes, filename: str, transcript: str | None) ->
     return get_status()
 
 
+# Synthesized WAVs keyed by (text, reference mtime): her bookmarked/repeated
+# sentences — the most-tapped by design — play instantly instead of paying
+# GPU synthesis on every tap. Invalidates automatically on a new reference.
+_wav_cache: dict[tuple[str, float], bytes] = {}
+_WAV_CACHE_MAX = 128
+
+
 async def synthesize(text: str) -> bytes:
     """Return WAV audio of `text` in the cloned voice."""
-    if settings.mock_inference:
-        return _mock_tone_wav()
+    if not enabled():
+        raise VoiceError("The cloned voice is turned off on this server.", status=409)
 
+    # Contract first: 409-without-reference must behave identically in mock
+    # and real mode (the tablet's fallback depends on it). Mock replaces only
+    # the sidecar call — the upload flow works in mock, so upload first.
     status = get_status()
     if not status["cloned_available"]:
         raise VoiceError("No voice recording has been uploaded yet.", status=409)
 
-    from .llm import _get_client  # shared keep-alive client
+    if settings.mock_inference:
+        return _mock_tone_wav()
 
-    resp = await _get_client().post(
+    ref_mtime = reference_path().stat().st_mtime
+    cache_key = (text, ref_mtime)
+    cached = _wav_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    from .llm import get_client  # shared keep-alive client
+
+    resp = await get_client().post(
         f"{settings.tts_url.rstrip('/')}/tts",
         json={
             "text": text,
@@ -119,7 +144,11 @@ async def synthesize(text: str) -> bytes:
         },
     )
     resp.raise_for_status()
-    return resp.content
+    audio = resp.content
+    if len(_wav_cache) >= _WAV_CACHE_MAX:
+        _wav_cache.pop(next(iter(_wav_cache)))  # drop oldest inserted
+    _wav_cache[cache_key] = audio
+    return audio
 
 
 # ── Audio helpers ────────────────────────────────────────────────────────────
@@ -133,15 +162,25 @@ def _normalize_to_wav(data: bytes, suffix: str) -> bytes:
     """
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg:
-        proc = subprocess.run(
-            [ffmpeg, "-hide_banner", "-loglevel", "error",
-             "-i", "pipe:0", "-ac", "1", "-ar", "16000",
-             "-f", "wav", "pipe:1"],
-            input=data, capture_output=True,
-        )
-        if proc.returncode != 0 or not proc.stdout:
-            raise VoiceError("Couldn't read that audio file — is it a valid recording?")
-        return proc.stdout
+        # ffmpeg must write to a real (seekable) file, NOT a pipe: with
+        # pipe:1 it can't seek back to patch the RIFF sizes and leaves
+        # 0xFFFFFFFF placeholders — wave then reports a ~37-hour duration,
+        # silently disabling the too-short guard and storing broken headers.
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="aphasia-voice-") as tmp:
+            src = Path(tmp) / f"upload{suffix}"
+            dst = Path(tmp) / "normalized.wav"
+            src.write_bytes(data)
+            proc = subprocess.run(
+                [ffmpeg, "-hide_banner", "-loglevel", "error",
+                 "-i", str(src), "-ac", "1", "-ar", "16000",
+                 "-f", "wav", "-y", str(dst)],
+                capture_output=True,
+            )
+            if proc.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
+                raise VoiceError("Couldn't read that audio file — is it a valid recording?")
+            return dst.read_bytes()
 
     if suffix == ".mp3":
         raise VoiceError(

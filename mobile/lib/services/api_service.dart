@@ -45,13 +45,52 @@ class ApiService {
 
   Future<Map<String, dynamic>> _decode(http.Response resp) async {
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      throw ApiException('HTTP ${resp.statusCode}', statusCode: resp.statusCode);
+      // Surface the backend's caregiver-facing `detail` message (e.g. "That
+      // clip is too short…") instead of an opaque HTTP code.
+      throw ApiException(
+        _detailFrom(resp) ?? 'HTTP ${resp.statusCode}',
+        statusCode: resp.statusCode,
+      );
     }
     try {
       return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     } on FormatException {
       throw const ApiException('Bad response from server');
     }
+  }
+
+  String? _detailFrom(http.Response resp) {
+    try {
+      final body = jsonDecode(utf8.decode(resp.bodyBytes));
+      final detail = (body as Map<String, dynamic>)['detail'];
+      return detail is String && detail.isNotEmpty ? detail : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Shared multipart POST used by vision, transcribe, and voice upload.
+  Future<Map<String, dynamic>> _multipart(
+    String path, {
+    required String field,
+    required List<int> bytes,
+    required String filename,
+    MediaType? contentType,
+    Map<String, String> fields = const {},
+    Duration? timeout,
+  }) {
+    final request = http.MultipartRequest('POST', _uri(path))
+      ..files.add(http.MultipartFile.fromBytes(
+        field,
+        bytes,
+        filename: filename,
+        contentType: contentType,
+      ))
+      ..fields.addAll(fields);
+    return _guard(() async {
+      final streamed = await _client.send(request).timeout(timeout ?? _timeout);
+      return _decode(await http.Response.fromStream(streamed));
+    });
   }
 
   /// Quick reachability probe. Uses a short timeout by default so callers
@@ -87,29 +126,25 @@ class ApiService {
   }
 
   Future<VisionResult> vision(List<int> imageBytes, {String filename = 'photo.jpg'}) async {
-    final request = http.MultipartRequest('POST', _uri('/vision'))
-      ..files.add(http.MultipartFile.fromBytes(
-        'image',
-        imageBytes,
-        filename: filename,
-        // Without this the part defaults to application/octet-stream, which
-        // flows into the vision model's data URL and real vLLM rejects it.
-        contentType: MediaType('image', 'jpeg'),
-      ));
-    final body = await _guard(() async {
-      final streamed = await _client.send(request).timeout(_timeout);
-      return _decode(await http.Response.fromStream(streamed));
-    });
+    final body = await _multipart(
+      '/vision',
+      field: 'image',
+      bytes: imageBytes,
+      filename: filename,
+      // Without this the part defaults to application/octet-stream, which
+      // flows into the vision model's data URL and real vLLM rejects it.
+      contentType: MediaType('image', 'jpeg'),
+    );
     return VisionResult.fromJson(body);
   }
 
   Future<TranscribeResult> transcribe(List<int> audioBytes, {String format = 'wav'}) async {
-    final request = http.MultipartRequest('POST', _uri('/transcribe?format=$format'))
-      ..files.add(http.MultipartFile.fromBytes('audio', audioBytes, filename: 'audio.$format'));
-    final body = await _guard(() async {
-      final streamed = await _client.send(request).timeout(_timeout);
-      return _decode(await http.Response.fromStream(streamed));
-    });
+    final body = await _multipart(
+      '/transcribe?format=$format',
+      field: 'audio',
+      bytes: audioBytes,
+      filename: 'audio.$format',
+    );
     return TranscribeResult.fromJson(body);
   }
 
@@ -169,21 +204,30 @@ class ApiService {
     required String filename,
     String? transcript,
   }) async {
-    final request = http.MultipartRequest('POST', _uri('/voice/reference'))
-      ..files.add(http.MultipartFile.fromBytes('audio', audioBytes, filename: filename));
-    if (transcript != null && transcript.trim().isNotEmpty) {
-      request.fields['transcript'] = transcript.trim();
-    }
-    final body = await _guard(() async {
+    final body = await _multipart(
+      '/voice/reference',
+      field: 'audio',
+      bytes: audioBytes,
+      filename: filename,
+      fields: {
+        if (transcript != null && transcript.trim().isNotEmpty)
+          'transcript': transcript.trim(),
+      },
       // Reference processing includes a whisper pass — allow extra time.
-      final streamed = await _client.send(request).timeout(const Duration(seconds: 120));
-      return _decode(await http.Response.fromStream(streamed));
-    });
+      timeout: const Duration(seconds: 120),
+    );
     return VoiceStatus.fromJson(body);
   }
 
   /// Speak `text` in the cloned voice; returns WAV bytes to play.
-  Future<List<int>> ttsAudio(String text) async {
+  ///
+  /// Short timeout on purpose: warm synthesis of a sentence takes ~1-2s.
+  /// If it's slower than this, silence-then-fallback is worse than falling
+  /// back immediately — speech must feel dependable, not eventual.
+  Future<List<int>> ttsAudio(
+    String text, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
     return _guard(() async {
       final resp = await _client
           .post(
@@ -191,7 +235,7 @@ class ApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'text': text}),
           )
-          .timeout(_timeout);
+          .timeout(timeout);
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw ApiException('HTTP ${resp.statusCode}', statusCode: resp.statusCode);
       }

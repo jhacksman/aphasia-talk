@@ -207,6 +207,14 @@ async def upload_voice_reference(
         return await voice.store_reference(data, audio.filename or "", transcript)
     except voice.VoiceError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
+    except httpx.HTTPError:
+        # Auto-transcription needs the whisper service; say so honestly
+        # instead of a raw 500 that reads as "bad recording".
+        raise HTTPException(
+            status_code=503,
+            detail="The transcription service isn't answering — try again in a "
+                   "minute, or type the spoken words yourself.",
+        )
 
 
 @app.post("/tts")

@@ -23,6 +23,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # ffmpeg: the voice-reference normalization path must be the TESTED
+          # path — without it, tests exercise only the no-ffmpeg fallback.
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 

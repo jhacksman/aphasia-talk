@@ -98,10 +98,11 @@ services:
       - DATABASE_PATH=/app/data/aphasia_talk.db
     volumes:
       - ./data:/app/data
+    # No depends_on for tts: the sidecar is optional (its image is built
+    # manually on the Spark) and the backend proxies to it lazily — a missing
+    # voice clone must never keep the core stack from starting.
     depends_on:
       vllm:
         condition: service_healthy
       whisper:
-        condition: service_started
-      tts:
         condition: service_started
